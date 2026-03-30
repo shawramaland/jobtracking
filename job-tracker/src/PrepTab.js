@@ -1,0 +1,352 @@
+import { useState, useCallback } from "react";
+import { QUESTIONS, CHEAT_SHEETS } from "./prepData";
+
+const CATEGORIES = ["All", "Networking", "Windows / AD", "Linux", "Cloud", "VMware", "macOS", "Help Desk", "Behavioral"];
+const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
+const DIFF_COLORS = { Easy: "#4ade80", Medium: "#fbbf24", Hard: "#f87171" };
+
+const RATINGS = [
+  { key: "correct",  label: "✅ Got it right",  color: "#4ade80", bg: "#1a3b2a", border: "#16a34a", storage: "prep-correct"  },
+  { key: "half",     label: "⚡ Half correct",   color: "#fbbf24", bg: "#3b2f1a", border: "#d97706", storage: "prep-half"    },
+  { key: "practice", label: "🔄 Needs practice", color: "#f87171", bg: "#3b1a1a", border: "#dc2626", storage: "prep-practice" },
+];
+
+function loadSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); }
+  catch { return new Set(); }
+}
+function saveSet(key, set) {
+  localStorage.setItem(key, JSON.stringify([...set]));
+}
+
+// ── FREE LOCAL EVALUATOR ──────────────────────────────────────────────────────
+const STOP_WORDS = new Set([
+  "the","a","an","is","are","was","were","be","been","being","have","has","had",
+  "do","does","did","will","would","could","should","may","might","can","to","of",
+  "in","for","on","with","at","by","from","up","about","into","and","but","or",
+  "not","only","that","this","it","its","you","your","they","their","if","when",
+  "where","which","who","what","how","all","each","every","more","most","other",
+  "some","no","as","also","than","very","just","used","use","allow","provide",
+  "make","need","give","work","run","called","known","based","set","get","see",
+  "let","take","both","either","so","then","than","too","such","over","under",
+  "between","out","off","same","new","one","two","three","between","while","after",
+  "before","during","through","because","example","using","without","within",
+]);
+
+function evaluateLocally(idealAnswer, userAnswer) {
+  if (!userAnswer.trim() || userAnswer.trim().length < 15) {
+    return { rating: "practice", feedback: "Answer too short — try to explain in more detail.", score: 0, found: 0, total: 0, missed: [] };
+  }
+
+  const norm = (t) => t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const idealNorm = norm(idealAnswer);
+  const userNorm  = norm(userAnswer);
+
+  const idealWords = idealNorm.split(" ");
+  const keywordsSet = new Set();
+
+  // Single keywords: 3+ chars, not a stop word
+  idealWords.forEach(w => {
+    if (w.length >= 3 && !STOP_WORDS.has(w)) keywordsSet.add(w);
+  });
+
+  // 2-word technical phrases (both words meaningful)
+  for (let i = 0; i < idealWords.length - 1; i++) {
+    const a = idealWords[i], b = idealWords[i + 1];
+    if (a.length >= 3 && b.length >= 3 && !STOP_WORDS.has(a) && !STOP_WORDS.has(b)) {
+      keywordsSet.add(a + " " + b);
+    }
+  }
+
+  const keywords = [...keywordsSet];
+  const found  = keywords.filter(kw => userNorm.includes(kw));
+  const missed = keywords.filter(kw => !userNorm.includes(kw));
+  const score  = keywords.length > 0 ? found.length / keywords.length : 0;
+
+  // Pick most meaningful missed terms (prefer shorter single words = key terms)
+  const topMissed = missed
+    .filter(kw => !kw.includes(" "))   // single words first
+    .filter(kw => kw.length >= 4)
+    .slice(0, 5);
+
+  let rating, feedback;
+  if (score >= 0.65) {
+    rating   = "correct";
+    feedback = `Great answer! You covered ${found.length} of ${keywords.length} key concepts.`;
+  } else if (score >= 0.30) {
+    rating   = "half";
+    feedback = `Partial — ${found.length}/${keywords.length} concepts covered. Consider also mentioning: ${topMissed.join(", ") || "more detail"}.`;
+  } else {
+    rating   = "practice";
+    feedback = `Needs more study — only ${found.length}/${keywords.length} concepts found. Key terms missing: ${topMissed.join(", ") || "review the ideal answer"}.`;
+  }
+
+  return { rating, feedback, score, found: found.length, total: keywords.length, missed: topMissed };
+}
+
+// ── MOCK INTERVIEW ────────────────────────────────────────────────────────────
+function MockInterview() {
+  const [category, setCategory]     = useState("All");
+  const [difficulty, setDifficulty] = useState("All");
+  const [userAnswer, setUserAnswer] = useState("");
+  const [revealed, setRevealed]     = useState(false);
+  const [evalResult, setEvalResult] = useState(null);
+  const [idx, setIdx]               = useState(0);
+  const [hideRated, setHideRated]   = useState(false);
+
+  const [ratings, setRatings] = useState(() =>
+    Object.fromEntries(RATINGS.map(r => [r.key, loadSet(r.storage)]))
+  );
+
+  const ratedIds      = new Set([...ratings.correct, ...ratings.half, ...ratings.practice]);
+  const filtered      = QUESTIONS.filter(q =>
+    (category === "All" || q.category === category) &&
+    (difficulty === "All" || q.difficulty === difficulty) &&
+    (!hideRated || !ratedIds.has(q.id))
+  );
+  const question      = filtered[idx % Math.max(filtered.length, 1)];
+  const currentRating = RATINGS.find(r => ratings[r.key].has(question?.id));
+
+  const goTo = useCallback((newIdx) => {
+    setRevealed(false);
+    setUserAnswer("");
+    setEvalResult(null);
+    setIdx(newIdx);
+  }, []);
+
+  const next    = useCallback(() => goTo((idx + 1) % Math.max(filtered.length, 1)), [idx, filtered.length, goTo]);
+  const prev    = useCallback(() => goTo((idx - 1 + filtered.length) % Math.max(filtered.length, 1)), [idx, filtered.length, goTo]);
+  const shuffle = useCallback(() => goTo(Math.floor(Math.random() * filtered.length)), [filtered.length, goTo]);
+
+  const applyRating = useCallback((ratingKey, id) => {
+    setRatings(prev => {
+      const updated = { ...prev };
+      RATINGS.forEach(r => {
+        const s = new Set(updated[r.key]);
+        s.delete(id);
+        updated[r.key] = s;
+        saveSet(r.storage, s);
+      });
+      const target = RATINGS.find(r => r.key === ratingKey);
+      if (currentRating?.key !== ratingKey && target) {
+        const s = new Set(updated[ratingKey]);
+        s.add(id);
+        updated[ratingKey] = s;
+        saveSet(target.storage, s);
+      }
+      return updated;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRating]);
+
+  const handleCheck = () => {
+    const result = evaluateLocally(question.a, userAnswer);
+    setEvalResult(result);
+    setRevealed(true);
+    applyRating(result.rating, question.id);
+  };
+
+  const sel = { padding: "6px 10px", fontSize: "12px", background: "#0f172a", border: "1px solid #1e3a5f", color: "#e2e8f0", fontFamily: "inherit", borderRadius: "6px", cursor: "pointer", outline: "none" };
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
+        <select value={category} onChange={e => { setCategory(e.target.value); goTo(0); }} style={sel}>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={difficulty} onChange={e => { setDifficulty(e.target.value); goTo(0); }} style={sel}>
+          {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <button onClick={() => { setHideRated(s => !s); goTo(0); }}
+          style={{ padding: "6px 12px", borderRadius: "6px", border: `1px solid ${hideRated ? "#22d3ee" : "#334155"}`, background: "transparent", color: hideRated ? "#22d3ee" : "#475569", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>
+          {hideRated ? "Show all" : "Hide rated"}
+        </button>
+      </div>
+
+      {/* Progress counters */}
+      <div style={{ display: "flex", gap: "12px", marginBottom: "14px", fontSize: "11px", flexWrap: "wrap" }}>
+        <span style={{ color: "#475569" }}>{filtered.length} questions</span>
+        {RATINGS.map(r => (
+          <span key={r.key} style={{ color: r.color }}>{r.label.split(" ")[0]} {ratings[r.key].size}</span>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#475569", fontSize: "13px" }}>
+          No questions match. Try changing the filters or turn off "Hide rated".
+        </div>
+      ) : (
+        <>
+          {/* Card */}
+          <div style={{ background: "rgba(30,41,59,0.8)", border: `1px solid ${currentRating ? currentRating.border : "#1e3a5f"}`, borderRadius: "10px", padding: "20px", marginBottom: "12px", transition: "border-color 0.3s" }}>
+
+            {/* Meta */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "#1e2f4f", color: "#60a5fa", border: "1px solid #2563eb" }}>{question.category}</span>
+              <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "#0f172a", color: DIFF_COLORS[question.difficulty], border: `1px solid ${DIFF_COLORS[question.difficulty]}40` }}>{question.difficulty}</span>
+              {currentRating && (
+                <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: currentRating.bg, color: currentRating.color, border: `1px solid ${currentRating.border}` }}>{currentRating.label}</span>
+              )}
+              <span style={{ fontSize: "10px", color: "#334155", marginLeft: "auto" }}>{(idx % filtered.length) + 1} / {filtered.length}</span>
+            </div>
+
+            {/* Question */}
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "#f1f5f9", lineHeight: "1.5", marginBottom: "16px" }}>
+              {question.q}
+            </div>
+
+            {/* Input phase */}
+            {!revealed && (
+              <>
+                <textarea
+                  value={userAnswer}
+                  onChange={e => setUserAnswer(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && e.ctrlKey && handleCheck()}
+                  placeholder="Type your answer here... (Ctrl+Enter to submit)"
+                  rows={4}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", background: "#0a0e17", border: "1px solid #1e3a5f", color: "#e2e8f0", fontSize: "12px", outline: "none", fontFamily: "inherit", resize: "vertical", lineHeight: "1.6" }}
+                />
+                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button onClick={handleCheck}
+                    style={{ flex: 1, padding: "12px", borderRadius: "8px", background: userAnswer.trim() ? "linear-gradient(135deg, #22d3ee, #818cf8)" : "rgba(30,41,59,0.8)", border: userAnswer.trim() ? "none" : "1px dashed #334155", color: userAnswer.trim() ? "#0a0e17" : "#475569", fontSize: "12px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", letterSpacing: "1px" }}>
+                    {userAnswer.trim() ? "📊 EVALUATE MY ANSWER" : "💡 JUST SHOW ANSWER"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Results phase */}
+            {revealed && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+                {/* User's answer */}
+                {userAnswer.trim() && (
+                  <div style={{ background: "#0f1f35", borderRadius: "8px", padding: "14px", border: "1px solid #2563eb40" }}>
+                    <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#60a5fa", marginBottom: "8px" }}>YOUR ANSWER</div>
+                    <div style={{ fontSize: "12px", color: "#cbd5e1", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>{userAnswer}</div>
+                  </div>
+                )}
+
+                {/* Evaluation verdict */}
+                {evalResult && userAnswer.trim() && (() => {
+                  const r = RATINGS.find(r => r.key === evalResult.rating) || RATINGS[2];
+                  return (
+                    <div style={{ background: r.bg, borderRadius: "8px", padding: "14px", border: `1px solid ${r.border}` }}>
+                      <div style={{ fontSize: "14px", fontWeight: "800", color: r.color, marginBottom: "6px" }}>{r.label}</div>
+                      <div style={{ fontSize: "12px", color: "#cbd5e1", lineHeight: "1.6" }}>{evalResult.feedback}</div>
+                      <div style={{ marginTop: "8px", height: "4px", background: "#0f172a", borderRadius: "2px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.round(evalResult.score * 100)}%`, background: r.border, borderRadius: "2px", transition: "width 0.6s ease" }} />
+                      </div>
+                      <div style={{ fontSize: "10px", color: "#475569", marginTop: "4px" }}>
+                        {Math.round(evalResult.score * 100)}% keyword coverage ({evalResult.found}/{evalResult.total} concepts)
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Ideal answer */}
+                <div style={{ background: "#0a0e17", borderRadius: "8px", padding: "14px", border: "1px solid #22d3ee30" }}>
+                  <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#22d3ee", marginBottom: "8px" }}>IDEAL ANSWER</div>
+                  <pre style={{ margin: 0, fontSize: "12px", color: "#94a3b8", lineHeight: "1.7", whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                    {question.a}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Override rating (always visible after reveal) */}
+          {revealed && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ fontSize: "10px", color: "#334155", marginBottom: "8px", letterSpacing: "1px" }}>
+                {evalResult && userAnswer.trim() ? "OVERRIDE RATING:" : "RATE YOURSELF:"}
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {RATINGS.map(r => {
+                  const active = currentRating?.key === r.key;
+                  return (
+                    <button key={r.key} onClick={() => applyRating(r.key, question.id)}
+                      style={{ flex: 1, padding: "10px 8px", borderRadius: "6px", border: `1px solid ${active ? r.border : "#1e3a5f"}`, background: active ? r.bg : "transparent", color: active ? r.color : "#334155", fontSize: "11px", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? "700" : "400", transition: "all 0.2s", minWidth: "90px" }}>
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={prev} style={{ padding: "10px 16px", borderRadius: "6px", border: "1px solid #334155", background: "transparent", color: "#64748b", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>← Prev</button>
+            <button onClick={shuffle} style={{ flex: 1, padding: "10px", borderRadius: "6px", border: "1px solid #334155", background: "transparent", color: "#94a3b8", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>🔀 Shuffle</button>
+            <button onClick={next} style={{ padding: "10px 16px", borderRadius: "6px", background: "linear-gradient(135deg, #22d3ee, #818cf8)", border: "none", color: "#0a0e17", fontSize: "12px", fontWeight: "800", cursor: "pointer", fontFamily: "inherit" }}>Next →</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── CHEAT SHEETS ──────────────────────────────────────────────────────────────
+function CheatSheets() {
+  const [activeSheet, setActiveSheet] = useState(CHEAT_SHEETS[0].id);
+  const [openSections, setOpenSections] = useState({});
+  const sheet = CHEAT_SHEETS.find(s => s.id === activeSheet);
+  const toggleSection = (title) => setOpenSections(prev => ({ ...prev, [title]: !prev[title] }));
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
+        {CHEAT_SHEETS.map(s => (
+          <button key={s.id} onClick={() => setActiveSheet(s.id)}
+            style={{ padding: "8px 14px", borderRadius: "6px", border: `1px solid ${activeSheet === s.id ? "#22d3ee" : "#1e3a5f"}`, background: activeSheet === s.id ? "rgba(34,211,238,0.1)" : "transparent", color: activeSheet === s.id ? "#22d3ee" : "#64748b", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" }}>
+            {s.emoji} {s.title}
+          </button>
+        ))}
+      </div>
+      {sheet.sections.map(section => {
+        const isOpen = openSections[section.title] !== false;
+        return (
+          <div key={section.title} style={{ background: "rgba(30,41,59,0.6)", border: "1px solid #1e3a5f", borderRadius: "8px", marginBottom: "8px", overflow: "hidden" }}>
+            <div onClick={() => toggleSection(section.title)}
+              style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: isOpen ? "rgba(34,211,238,0.05)" : "transparent" }}>
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "#e2e8f0" }}>{section.title}</span>
+              <span style={{ color: "#475569", fontSize: "12px", transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▼</span>
+            </div>
+            {isOpen && (
+              <div style={{ padding: "0 16px 16px" }}>
+                <pre style={{ margin: 0, fontSize: "11px", color: "#94a3b8", lineHeight: "1.8", whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", background: "#0a0e17", padding: "12px", borderRadius: "6px", overflowX: "auto" }}>
+                  {section.content}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── PREP TAB ──────────────────────────────────────────────────────────────────
+export default function PrepTab() {
+  const [mode, setMode] = useState("mock");
+
+  return (
+    <div style={{ paddingBottom: "40px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#22d3ee", marginBottom: "16px", textAlign: "center" }}>▶ PREP.exe</div>
+
+      <div style={{ display: "flex", gap: "6px", marginBottom: "20px", background: "rgba(15,23,42,0.6)", borderRadius: "8px", padding: "4px", border: "1px solid #1e3a5f" }}>
+        {[{ id: "mock", label: "🎤 Mock Interview" }, { id: "sheets", label: "📋 Cheat Sheets" }].map(m => (
+          <button key={m.id} onClick={() => setMode(m.id)}
+            style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "none", background: mode === m.id ? "rgba(34,211,238,0.15)" : "transparent", color: mode === m.id ? "#22d3ee" : "#475569", fontSize: "12px", fontWeight: mode === m.id ? "800" : "400", cursor: "pointer", fontFamily: "inherit", borderBottom: mode === m.id ? "2px solid #22d3ee" : "2px solid transparent", transition: "all 0.2s" }}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "mock"   && <MockInterview />}
+      {mode === "sheets" && <CheatSheets />}
+    </div>
+  );
+}
