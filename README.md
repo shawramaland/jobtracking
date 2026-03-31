@@ -7,7 +7,7 @@ A personal job application tracker built with React. Keep track of every applica
 - **Job Tracker** — Log applications with company, role, source, salary range, and notes
 - **Stats Dashboard** — Visual breakdown of your application statuses
 - **Prep Tab** — Mock interview questions + cheat sheets for technical interviews
-- **Game Tab** — DOOM. Because why not.
+- **Mini Game** — A little distraction between rejections
 - Import from CSV / XLSX (AllJobs export supported)
 - Export to CSV
 - Status sounds (including a special one for rejections)
@@ -44,7 +44,6 @@ Then open [http://localhost:3000](http://localhost:3000) in your browser.
 - Tone.js
 - xlsx
 - PapaParse
-- DOOM (doom.wasm by Jacob Enget, GPL — shareware episode © id Software)
 
 ---
 *Made by the epic gamer Garry Gershon*
