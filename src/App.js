@@ -1558,7 +1558,7 @@ function GameSelector() {
   const GAME_STYLES = {
     doom: {
       accent: "#e63946",
-      bg: "linear-gradient(135deg, #1a0000 0%, #0d0d0d 100%)",
+      bg: "linear-gradient(160deg, #000000 0%, #000000 25%, #1a0000 100%)",
       border: "#e63946",
       label: "💀 RIP AND TEAR",
       labelColor: "#e63946",
@@ -1620,7 +1620,10 @@ border: "#4ade80",
         {Object.entries(GAME_STYLES).map(([id, g]) => (
           <button key={id} onClick={() => setActiveGame(id)} style={{
             background: g.bg,
-            border: "1px solid #1a1a1a",
+            borderTop: `3px solid ${g.accent}`,
+            borderLeft: "1px solid #1a1a1a",
+            borderRight: "1px solid #1a1a1a",
+            borderBottom: "1px solid #1a1a1a",
             borderRadius: "12px",
             padding: "0",
             cursor: "pointer",
@@ -1629,10 +1632,8 @@ border: "#4ade80",
             outline: "none",
             overflow: "hidden",
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = g.border; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 8px 24px ${g.accent}25`; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-            {/* top accent bar */}
-            <div style={{ height: "3px", background: g.accent, width: "100%" }} />
+          onMouseEnter={e => { e.currentTarget.style.borderLeftColor = g.border; e.currentTarget.style.borderRightColor = g.border; e.currentTarget.style.borderBottomColor = g.border; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 8px 24px ${g.accent}25`; }}
+          onMouseLeave={e => { e.currentTarget.style.borderLeftColor = "#1a1a1a"; e.currentTarget.style.borderRightColor = "#1a1a1a"; e.currentTarget.style.borderBottomColor = "#1a1a1a"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
             <div style={{ padding: "18px 20px 20px" }}>
               {/* label */}
               <div style={{ fontSize: "9px", letterSpacing: "2px", color: g.labelColor, marginBottom: "10px", fontWeight: "800" }}>{g.label}</div>
