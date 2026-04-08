@@ -58,6 +58,79 @@ const STATUS_QUIPS = {
   "No Response": ["Hello? Anyone home?", "Ghosted again...", "*tumbleweed rolls by*"],
 };
 
+const THEMES = {
+  gamer: {
+    label: "🎮 Gamer",
+    accent: "#e63946",
+    accentHover: "#ff4757",
+    bg: "#0d0d0d",
+    surface: "#111",
+    surface2: "#1a1a1a",
+    border: "#1a1a1a",
+    border2: "#222",
+    text: "#f0f0f0",
+    textMuted: "#888",
+    textDim: "#444",
+    panelTitle: "#e63946",
+  },
+  corporate: {
+    label: "💼 Corporate",
+    accent: "#2563eb",
+    accentHover: "#3b82f6",
+    bg: "#0a0f1a",
+    surface: "#0f172a",
+    surface2: "#1e293b",
+    border: "#1e293b",
+    border2: "#334155",
+    text: "#e2e8f0",
+    textMuted: "#94a3b8",
+    textDim: "#475569",
+    panelTitle: "#60a5fa",
+  },
+  simple: {
+    label: "⬛ Simple",
+    accent: "#6b7280",
+    accentHover: "#9ca3af",
+    bg: "#111",
+    surface: "#1a1a1a",
+    surface2: "#222",
+    border: "#222",
+    border2: "#333",
+    text: "#d1d5db",
+    textMuted: "#6b7280",
+    textDim: "#374151",
+    panelTitle: "#9ca3af",
+  },
+  light: {
+    label: "☀️ Light",
+    accent: "#dc2626",
+    accentHover: "#ef4444",
+    bg: "#f3f4f6",
+    surface: "#ffffff",
+    surface2: "#f9fafb",
+    border: "#e5e7eb",
+    border2: "#d1d5db",
+    text: "#111827",
+    textMuted: "#6b7280",
+    textDim: "#9ca3af",
+    panelTitle: "#dc2626",
+  },
+  military: {
+    label: "🪖 Military",
+    accent: "#6b8f3e",
+    accentHover: "#7dab47",
+    bg: "#1a1c0f",
+    surface: "#22251a",
+    surface2: "#2c3020",
+    border: "#2c3020",
+    border2: "#3d4328",
+    text: "#c8d4a0",
+    textMuted: "#8a9e60",
+    textDim: "#4a5530",
+    panelTitle: "#8aab4a",
+  },
+};
+
 function playStatusSound(status) {
   try {
     const now = Tone.now();
@@ -214,35 +287,35 @@ function Dashboard({ jobs }) {
   const maxWeekly = Math.max(...weeklyData.map(w => w[1]), 1);
 
   const card = (label, value, sub, color) => (
-    <div style={{ background: "#111", border: `1px solid ${color}40`, borderRadius: "10px", padding: "16px 20px", flex: "1 1 140px", minWidth: "140px" }}>
+    <div style={{ background: "var(--surface)", border: `1px solid ${color}40`, borderRadius: "10px", padding: "16px 20px", flex: "1 1 140px", minWidth: "140px" }}>
       <div style={{ fontSize: "22px", fontWeight: "800", color }}>{value}</div>
-      <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>{label}</div>
-      {sub && <div style={{ fontSize: "10px", color: "#444", marginTop: "4px" }}>{sub}</div>}
+      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>{label}</div>
+      {sub && <div style={{ fontSize: "10px", color: "var(--text-dim)", marginTop: "4px" }}>{sub}</div>}
     </div>
   );
 
   return (
     <div style={{ padding: "0 0 40px 0" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#e63946", marginBottom: "16px", textAlign: "center" }}>▶ STATS.exe</div>
+      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--accent)", marginBottom: "16px", textAlign: "center" }}>▶ STATS.exe</div>
 
       {/* Summary cards */}
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "24px" }}>
-        {card("TOTAL APPS", total, null, "#e63946")}
+        {card("TOTAL APPS", total, null, "var(--accent)")}
         {card("RESPONSE RATE", `${responseRate}%`, `${responded} responded`, "#fbbf24")}
         {card("IN PROGRESS", inProgress, "active pipelines", "#fb923c")}
         {card("OFFERS", stats["Offer"] || 0, `${offerRate}% conversion`, "#4ade80")}
       </div>
 
       {/* Status breakdown bar chart */}
-      <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#444", marginBottom: "14px" }}>STATUS BREAKDOWN</div>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--text-dim)", marginBottom: "14px" }}>STATUS BREAKDOWN</div>
         {STATUSES.filter(s => stats[s] > 0).map(s => (
           <div key={s} style={{ marginBottom: "8px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "3px" }}>
               <span style={{ color: STATUS_COLORS[s].text }}>{STATUS_EMOJIS[s]} {s}</span>
-              <span style={{ color: "#444" }}>{stats[s]} ({Math.round((stats[s] / total) * 100)}%)</span>
+              <span style={{ color: "var(--text-dim)" }}>{stats[s]} ({Math.round((stats[s] / total) * 100)}%)</span>
             </div>
-            <div style={{ background: "#0d0d0d", borderRadius: "3px", height: "6px", overflow: "hidden" }}>
+            <div style={{ background: "var(--bg)", borderRadius: "3px", height: "6px", overflow: "hidden" }}>
               <div style={{ width: `${(stats[s] / total) * 100}%`, height: "100%", background: STATUS_COLORS[s].border, borderRadius: "3px", transition: "width 0.6s ease" }} />
             </div>
           </div>
@@ -250,16 +323,16 @@ function Dashboard({ jobs }) {
       </div>
 
       {/* Source breakdown */}
-      <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#444", marginBottom: "14px" }}>SOURCE BREAKDOWN</div>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--text-dim)", marginBottom: "14px" }}>SOURCE BREAKDOWN</div>
         {sourceStats.map(({ source, count }) => (
           <div key={source} style={{ marginBottom: "8px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "3px" }}>
-              <span style={{ color: "#888" }}>{source}</span>
-              <span style={{ color: "#444" }}>{count}</span>
+              <span style={{ color: "var(--text-muted)" }}>{source}</span>
+              <span style={{ color: "var(--text-dim)" }}>{count}</span>
             </div>
-            <div style={{ background: "#0d0d0d", borderRadius: "3px", height: "6px", overflow: "hidden" }}>
-              <div style={{ width: `${(count / maxSourceCount) * 100}%`, height: "100%", background: "#e63946", borderRadius: "3px", transition: "width 0.6s ease" }} />
+            <div style={{ background: "var(--bg)", borderRadius: "3px", height: "6px", overflow: "hidden" }}>
+              <div style={{ width: `${(count / maxSourceCount) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: "3px", transition: "width 0.6s ease" }} />
             </div>
           </div>
         ))}
@@ -267,14 +340,14 @@ function Dashboard({ jobs }) {
 
       {/* Weekly trend */}
       {weeklyData.length > 1 && (
-        <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#444", marginBottom: "14px" }}>WEEKLY ACTIVITY</div>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--text-dim)", marginBottom: "14px" }}>WEEKLY ACTIVITY</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "80px" }}>
             {weeklyData.map(([week, count]) => (
               <div key={week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                <div style={{ fontSize: "9px", color: "#444" }}>{count}</div>
-                <div style={{ width: "100%", height: `${(count / maxWeekly) * 60}px`, background: "linear-gradient(180deg, #e63946, #7a0010)", borderRadius: "3px 3px 0 0", minHeight: "4px", transition: "height 0.6s ease" }} />
-                <div style={{ fontSize: "8px", color: "#333", writingMode: "vertical-rl", textOrientation: "mixed" }}>{week.slice(5)}</div>
+                <div style={{ fontSize: "9px", color: "var(--text-dim)" }}>{count}</div>
+                <div style={{ width: "100%", height: `${(count / maxWeekly) * 60}px`, background: "var(--accent)", borderRadius: "3px 3px 0 0", minHeight: "4px", transition: "height 0.6s ease" }} />
+                <div style={{ fontSize: "8px", color: "var(--text-dim)", writingMode: "vertical-rl", textOrientation: "mixed" }}>{week.slice(5)}</div>
               </div>
             ))}
           </div>
@@ -408,8 +481,10 @@ function WelcomeScreen({ onEnter }) {
   const [phase, setPhase] = useState("pre"); // "pre" | "boot" | "title"
   const [fading, setFading] = useState(false);
   // Randomly pick variant once on mount
-  const variantRef = useRef(["bios", "win95", "c64"][Math.floor(Math.random() * 3)]);
+  const variantRef = useRef(["bios", "win95", "c64", "matrix"][Math.floor(Math.random() * 4)]);
   const audioCtxRef = useRef(null);
+  const matrixCanvasRef = useRef(null);
+  const matrixAnimRef = useRef(null);
 
   // ── Sound helpers (raw Web Audio) ─────────────────────────────────────────
   function getAC() {
@@ -502,6 +577,28 @@ function WelcomeScreen({ onEnter }) {
     { text: "  It is now safe to send your resume.", color: "#fff", delay: 3600, sound: "tick" },
   ];
 
+  const MATRIX_SEQUENCE = [
+    { text: "Initializing kernel 6.1.0-matrix..................... [ OK ]", color: "#00aa33", delay: 0, sound: "tick" },
+    { text: "Loading system modules.............................. [ OK ]", color: "#00aa33", delay: 200, sound: "tick" },
+    { text: "Starting udev daemon................................ [ OK ]", color: "#00aa33", delay: 380, sound: "tick" },
+    { text: "Mounting filesystems................................ [ OK ]", color: "#00aa33", delay: 540, sound: "disk" },
+    { text: "Checking /dev/reality............................... [ FAKE ]", color: "#007722", delay: 700, sound: "tick" },
+    { text: "Starting network interfaces......................... [ OK ]", color: "#00aa33", delay: 860, sound: "tick" },
+    { text: "Connecting to mainframe............................. [ OK ]", color: "#00aa33", delay: 1020, sound: "disk" },
+    { text: "Bypassing firewall.................................. [ OK ]", color: "#00aa33", delay: 1180, sound: "tick" },
+    { text: "Decrypting job_market.db............................ [ OK ]", color: "#00aa33", delay: 1340, sound: "tick" },
+    { text: "Loading resume.exe.................................. [ NOT FOUND ]", color: "#006611", delay: 1500, sound: "tick" },
+    { text: "Loading cope.exe.................................... [ OK ]", color: "#00aa33", delay: 1660, sound: "tick" },
+    { text: "Starting linkedin_anxiety.service................... [ OK ]", color: "#00aa33", delay: 1820, sound: "tick" },
+    { text: "", delay: 1950 },
+    { text: "WARNING: Self worth module running low", color: "#00cc44", delay: 2050, sound: "tick" },
+    { text: "WARNING: Coffee daemon unresponsive", color: "#00cc44", delay: 2180, sound: "tick" },
+    { text: "", delay: 2280 },
+    { text: "Initializing JOB-TRACKER.exe........................ [ OK ]", color: "#00ff55", delay: 2420, sound: "loading" },
+    { text: "", delay: 2560 },
+    { text: "System ready. Wake up.", color: "#00ff41", delay: 2700, sound: "tick" },
+  ];
+
   const C64_SEQUENCE = [
     { text: "    **** COMMODORE 64 BASIC V2 ****", color: "#a0a0ff", delay: 0 },
     { text: "", delay: 300 },
@@ -533,8 +630,8 @@ function WelcomeScreen({ onEnter }) {
     if (phase !== "pre") return;
     setPhase("boot");
     const variant = variantRef.current;
-    const sequence = variant === "win95" ? WIN95_SEQUENCE : variant === "c64" ? C64_SEQUENCE : BIOS_SEQUENCE;
-    const titleDelay = variant === "win95" ? 4400 : variant === "c64" ? 5600 : 4100;
+    const sequence = variant === "win95" ? WIN95_SEQUENCE : variant === "c64" ? C64_SEQUENCE : variant === "matrix" ? MATRIX_SEQUENCE : BIOS_SEQUENCE;
+    const titleDelay = variant === "win95" ? 4400 : variant === "c64" ? 5600 : variant === "matrix" ? 3400 : 4100;
 
     if (variant === "bios") setTimeout(postBeep, 80);
 
@@ -569,9 +666,50 @@ function WelcomeScreen({ onEnter }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Matrix rain animation
+  useEffect(() => {
+    if (phase !== "title" || variantRef.current !== "matrix") return;
+    const canvas = matrixCanvasRef.current;
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext("2d");
+    const fontSize = 14;
+    const cols = Math.floor(canvas.width / fontSize);
+    const drops = Array(cols).fill(0).map(() => Math.floor(Math.random() * -50));
+    const chars = "01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ∑∆∏√∞≈";
+    let frameCount = 0;
+    const draw = () => {
+      frameCount++;
+      // Slow fade — long trails
+      ctx.fillStyle = "rgba(0,0,0,0.035)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Only advance drops every 3 frames for slow smooth fall
+      if (frameCount % 3 === 0) {
+        for (let i = 0; i < drops.length; i++) {
+          const char = chars[Math.floor(Math.random() * chars.length)];
+          const y = Math.floor(drops[i]) * fontSize;
+          ctx.font = `${fontSize}px monospace`;
+          // Head char — soft white-green
+          ctx.fillStyle = "#aaffcc";
+          ctx.fillText(char, i * fontSize, y);
+          // Body char behind — muted green
+          ctx.fillStyle = "#009922";
+          ctx.fillText(chars[Math.floor(Math.random() * chars.length)], i * fontSize, y - fontSize);
+          if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+          drops[i] += 0.8;
+        }
+      }
+      matrixAnimRef.current = requestAnimationFrame(draw);
+    };
+    matrixAnimRef.current = requestAnimationFrame(draw);
+    return () => { if (matrixAnimRef.current) cancelAnimationFrame(matrixAnimRef.current); };
+  }, [phase]);
+
   const variant = variantRef.current;
   const isWin95 = variant === "win95";
   const isC64 = variant === "c64";
+  const isMatrix = variant === "matrix";
 
   return (
     <div onClick={handleEnter} style={{
@@ -596,8 +734,25 @@ function WelcomeScreen({ onEnter }) {
         </div>
       )}
 
+      {/* MATRIX CANVAS — only during title phase (rain behind title) */}
+      {isMatrix && phase === "title" && (
+        <canvas ref={matrixCanvasRef} style={{ position: "fixed", inset: 0, width: "100%", height: "100%", display: "block", zIndex: 0 }} />
+      )}
+
+      {/* BOOT PHASE — MATRIX */}
+      {phase === "boot" && isMatrix && (
+        <div style={{ padding: "40px 48px", maxWidth: "700px" }}>
+          {lines.map((line, idx) => (
+            <div key={idx} style={{ fontSize: "13px", color: line.color || "#00aa33", lineHeight: "1.9", whiteSpace: "pre", fontFamily: "'Courier New', monospace" }}>
+              {line.text || "\u00A0"}
+            </div>
+          ))}
+          <span className="boot-cursor" style={{ fontSize: "13px", color: "#00ff41" }}>_</span>
+        </div>
+      )}
+
       {/* BOOT PHASE — BIOS */}
-      {phase === "boot" && !isWin95 && !isC64 && (
+      {phase === "boot" && !isWin95 && !isC64 && !isMatrix && (
         <div style={{ padding: "40px 48px", maxWidth: "700px" }}>
           {lines.map((line, idx) => (
             <div key={idx} style={{ fontSize: "13px", color: line.color || "#888", lineHeight: "1.9", whiteSpace: "pre" }}>
@@ -695,8 +850,26 @@ function WelcomeScreen({ onEnter }) {
         </div>
       )}
 
+      {/* TITLE PHASE — MATRIX */}
+      {phase === "title" && isMatrix && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "24px", background: "transparent", animation: "matrixSlideUp 1.2s cubic-bezier(0.16,1,0.3,1) both", position: "relative", zIndex: 1 }}>
+          <div style={{ fontSize: "11px", letterSpacing: "6px", color: "#00aa33", textTransform: "uppercase" }}>▶ SYSTEM BREACH COMPLETE</div>
+          <div style={{ fontSize: "clamp(36px, 6vw, 64px)", fontWeight: "900", letterSpacing: "-1px", textAlign: "center", color: "#00cc33", textShadow: "0 0 18px #00aa2299" }}>
+            JOB<span style={{ color: "#55ee88" }}>.</span>TRACKER<span style={{ color: "#55ee88" }}>()</span>
+          </div>
+          <div style={{ fontSize: "14px", color: "#007722", textAlign: "center", maxWidth: "420px", lineHeight: "1.7", fontFamily: "monospace" }}>
+            Track every application, prep for interviews,<br />and never lose sight of where you stand.
+          </div>
+          <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "13px", color: "#00aa33" }}>▶</span>
+            <span style={{ fontSize: "13px", color: "#00aa33", fontFamily: "monospace" }}>Press ENTER or click to begin</span>
+            <span className="boot-cursor" style={{ fontSize: "13px", color: "#00aa33" }}>_</span>
+          </div>
+        </div>
+      )}
+
       {/* TITLE PHASE — BIOS */}
-      {phase === "title" && !isWin95 && !isC64 && (
+      {phase === "title" && !isWin95 && !isC64 && !isMatrix && (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "24px", animation: "fadeInUp 0.6s ease-out" }}>
           <div style={{ fontSize: "11px", letterSpacing: "6px", color: "#e63946", textTransform: "uppercase" }}>▶ SYSTEM READY</div>
           <div style={{ fontSize: "clamp(36px, 6vw, 64px)", fontWeight: "900", color: "#fff", letterSpacing: "-1px", textAlign: "center" }}>
@@ -773,6 +946,7 @@ function WelcomeScreen({ onEnter }) {
         @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
         .boot-cursor { animation: blink 1s step-end infinite; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes matrixSlideUp { from { opacity: 0; transform: translateY(80px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );
@@ -1674,7 +1848,9 @@ export default function JobLogger() {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [quip, setQuip] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem("jt-theme") || "gamer");
   const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => { localStorage.setItem("jt-theme", theme); }, [theme]);
   const [toneStarted, setToneStarted] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const [tab, setTab] = useState("tracker");
@@ -2185,6 +2361,36 @@ export default function JobLogger() {
           {/* ── OPTIONS TAB ── */}
           {tab === "options" && (
             <div style={{ maxWidth: "600px" }}>
+
+              <div className="panel" style={{ marginBottom: "12px" }}>
+                <div className="panel-title">THEME</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                  {Object.entries(THEMES).map(([key, t]) => (
+                    <button
+                      key={key}
+                      onClick={() => setTheme(key)}
+                      style={{
+                        background: t.surface,
+                        border: `2px solid ${theme === key ? t.accent : t.border2}`,
+                        borderRadius: "8px",
+                        padding: "12px",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: theme === key ? t.accent : t.text, letterSpacing: "1px" }}>{t.label}</div>
+                      <div style={{ display: "flex", gap: "4px", marginTop: "8px" }}>
+                        <div style={{ width: "16px", height: "16px", borderRadius: "50%", background: t.accent }} />
+                        <div style={{ width: "16px", height: "16px", borderRadius: "50%", background: t.surface2 }} />
+                        <div style={{ width: "16px", height: "16px", borderRadius: "50%", background: t.bg }} />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="panel" style={{ marginBottom: "12px" }}>
                 <div className="panel-title">SOUND</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -2232,25 +2438,39 @@ export default function JobLogger() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap');
 
+        :root {
+          --accent:      ${THEMES[theme].accent};
+          --accent-hover:${THEMES[theme].accentHover};
+          --bg:          ${THEMES[theme].bg};
+          --surface:     ${THEMES[theme].surface};
+          --surface2:    ${THEMES[theme].surface2};
+          --border:      ${THEMES[theme].border};
+          --border2:     ${THEMES[theme].border2};
+          --text:        ${THEMES[theme].text};
+          --text-muted:  ${THEMES[theme].textMuted};
+          --text-dim:    ${THEMES[theme].textDim};
+          --panel-title: ${THEMES[theme].panelTitle};
+        }
+
         *, *::before, *::after { box-sizing: border-box; }
-        body { margin: 0; background: #0d0d0d; }
-        input::placeholder { color: #333; }
-        select option { background: #111; color: #f0f0f0; }
+        body { margin: 0; background: var(--bg); color: var(--text); }
+        input::placeholder { color: var(--text-dim); }
+        select option { background: var(--surface); color: var(--text); }
 
         /* ── ROOT LAYOUT ── */
-        .root-layout { display: flex; min-height: 100vh; }
+        .root-layout { display: flex; min-height: 100vh; background: var(--bg); }
 
         /* ── SIDEBAR ── */
         .sidebar { display: none; }
 
         /* ── MOBILE HEADER ── */
-        .mobile-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #1a1a1a; }
-        .mobile-tabs { display: flex; gap: 4px; padding: 8px 12px; background: #111; border-bottom: 1px solid #1a1a1a; overflow-x: auto; }
-        .mobile-tab-btn { background: transparent; border: none; color: #444; font-size: 10px; font-family: inherit; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
-        .mobile-tab-btn.active { color: #e63946; border-bottom-color: #e63946; }
+        .mobile-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+        .mobile-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .mobile-tab-btn { background: transparent; border: none; color: var(--text-dim); font-size: 10px; font-family: inherit; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
+        .mobile-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
         /* ── MAIN CONTENT ── */
-        .main-content { flex: 1; min-width: 0; overflow-y: auto; }
+        .main-content { flex: 1; min-width: 0; overflow-y: auto; background: var(--bg); }
 
         /* ── TRACKER LAYOUT ── */
         .tracker-layout { display: flex; flex-direction: column; padding: 16px; gap: 16px; }
@@ -2258,46 +2478,46 @@ export default function JobLogger() {
         .tracker-right { width: 100%; }
 
         /* ── PANELS ── */
-        .panel { background: #111; border: 1px solid #1a1a1a; border-radius: 8px; padding: 16px; }
-        .panel-title { font-size: 9px; letter-spacing: 3px; color: #e63946; margin-bottom: 14px; font-weight: 700; }
+        .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .panel-title { font-size: 9px; letter-spacing: 3px; color: var(--panel-title); margin-bottom: 14px; font-weight: 700; }
 
         /* ── FORM FIELDS ── */
-        .field { width: 100%; padding: 9px 12px; background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 6px; color: #f0f0f0; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; }
-        .field:focus { border-color: #e63946; }
-        .link-field { color: #e63946; }
-        .search-field { background: #111; border-color: #1a1a1a; }
+        .field { width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; }
+        .field:focus { border-color: var(--accent); }
+        .link-field { color: var(--accent); }
+        .search-field { background: var(--surface); border-color: var(--border); }
 
         /* ── BUTTONS ── */
-        .add-btn { width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #222; border-radius: 6px; color: #444; font-size: 12px; font-family: inherit; font-weight: 700; letter-spacing: 2px; cursor: not-allowed; transition: all 0.15s; }
-        .add-btn.ready { background: #e63946; border-color: #e63946; color: #fff; cursor: pointer; }
-        .add-btn.ready:hover { background: #ff4757; }
-        .ghost-btn { background: transparent; border: 1px solid #222; color: #555; font-size: 11px; font-family: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s; letter-spacing: 1px; }
-        .ghost-btn:hover { border-color: #e63946; color: #e63946; }
-        .ghost-btn.danger { border-color: #3a1a1a; color: #e63946; }
-        .ghost-btn.danger:hover { background: #e63946; color: #fff; }
+        .add-btn { width: 100%; padding: 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text-dim); font-size: 12px; font-family: inherit; font-weight: 700; letter-spacing: 2px; cursor: not-allowed; transition: all 0.15s; }
+        .add-btn.ready { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+        .add-btn.ready:hover { background: var(--accent-hover); }
+        .ghost-btn { background: transparent; border: 1px solid var(--border2); color: var(--text-muted); font-size: 11px; font-family: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s; letter-spacing: 1px; }
+        .ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .ghost-btn.danger { border-color: var(--border2); color: var(--accent); }
+        .ghost-btn.danger:hover { background: var(--accent); color: #fff; }
 
         /* ── JOB TABLE ── */
-        .job-table-wrap { border: 1px solid #1a1a1a; border-radius: 8px; overflow: hidden; }
+        .job-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
         .job-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .job-table thead tr { background: #111; border-bottom: 1px solid #1a1a1a; }
-        .job-table th { padding: 10px 12px; text-align: left; font-size: 9px; letter-spacing: 2px; color: #333; font-weight: 700; }
-        .job-row { border-bottom: 1px solid #141414; transition: background 0.1s; cursor: default; }
-        .job-row:hover { background: #111; }
-        .job-row.pinned { background: rgba(230,57,70,0.04); border-left: 2px solid #e63946; }
-        .job-row.editing { background: #111; border-bottom: none; }
-        .job-row td { padding: 10px 12px; vertical-align: middle; }
-        .edit-row td { padding: 0 12px; background: #0d0d0d; border-bottom: 1px solid #1a1a1a; }
+        .job-table thead tr { background: var(--surface); border-bottom: 1px solid var(--border); }
+        .job-table th { padding: 10px 12px; text-align: left; font-size: 9px; letter-spacing: 2px; color: var(--text-dim); font-weight: 700; }
+        .job-row { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: default; }
+        .job-row:hover { background: var(--surface); }
+        .job-row.pinned { background: rgba(230,57,70,0.04); border-left: 2px solid var(--accent); }
+        .job-row.editing { background: var(--surface); border-bottom: none; }
+        .job-row td { padding: 10px 12px; vertical-align: middle; color: var(--text); }
+        .edit-row td { padding: 0 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
         .pin-btn { background: transparent; border: none; cursor: pointer; font-size: 12px; opacity: 0.2; transition: opacity 0.15s; padding: 0; }
         .pin-btn:hover, .pin-btn.pinned { opacity: 1; }
-        .edit-btn { background: transparent; border: 1px solid #1e1e1e; color: #333; font-size: 9px; font-family: inherit; letter-spacing: 1px; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: all 0.15s; }
-        .edit-btn:hover { border-color: #e63946; color: #e63946; }
+        .edit-btn { background: transparent; border: 1px solid var(--border2); color: var(--text-dim); font-size: 9px; font-family: inherit; letter-spacing: 1px; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: all 0.15s; }
+        .edit-btn:hover { border-color: var(--accent); color: var(--accent); }
 
         /* ── SOUND BTN ── */
-        .sound-btn { background: transparent; border: 1px solid #1e1e1e; color: #333; font-size: 10px; font-family: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; letter-spacing: 1px; transition: all 0.15s; }
-        .sound-btn:hover { border-color: #e63946; color: #e63946; }
+        .sound-btn { background: transparent; border: 1px solid var(--border2); color: var(--text-dim); font-size: 10px; font-family: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; letter-spacing: 1px; transition: all 0.15s; }
+        .sound-btn:hover { border-color: var(--accent); color: var(--accent); }
 
         /* ── WELCOME SCREEN ── */
-        .welcome-overlay { position: fixed; inset: 0; background: #0d0d0d; z-index: 999; display: flex; align-items: center; justify-content: center; }
+        .welcome-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; align-items: center; justify-content: center; }
         .welcome-box { text-align: center; padding: 40px 24px; max-width: 480px; }
         .welcome-line { opacity: 0; animation: fadeUp 0.6s ease forwards; }
         .welcome-enter { background: #e63946; border: none; color: #fff; font-family: inherit; font-size: 14px; font-weight: 800; letter-spacing: 4px; padding: 14px 48px; border-radius: 6px; cursor: pointer; box-shadow: 0 0 32px #e6394640; transition: box-shadow 0.2s, transform 0.2s; }
@@ -2328,22 +2548,22 @@ export default function JobLogger() {
           .sidebar {
             display: flex; flex-direction: column;
             width: 220px; flex-shrink: 0;
-            background: #0a0a0a; border-right: 1px solid #1a1a1a;
+            background: var(--surface); border-right: 1px solid var(--border);
             padding: 24px 16px; position: sticky; top: 0; height: 100vh;
           }
-          .sidebar-logo { padding-bottom: 24px; border-bottom: 1px solid #1a1a1a; margin-bottom: 24px; }
+          .sidebar-logo { padding-bottom: 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
           .sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
           .sidebar-btn {
             display: flex; align-items: center; gap: 10px;
             background: transparent; border: none; border-radius: 6px;
-            color: #333; font-size: 11px; font-family: inherit; font-weight: 700;
+            color: var(--text-dim); font-size: 11px; font-family: inherit; font-weight: 700;
             letter-spacing: 2px; padding: 10px 12px; cursor: pointer;
             text-align: left; width: 100%; transition: all 0.15s;
           }
-          .sidebar-btn:hover { background: #111; color: #888; }
-          .sidebar-btn.active { background: #1a0a0b; color: #e63946; border-left: 2px solid #e63946; }
+          .sidebar-btn:hover { background: var(--surface2); color: var(--text-muted); }
+          .sidebar-btn.active { background: var(--surface2); color: var(--accent); border-left: 2px solid var(--accent); }
           .sidebar-icon { font-size: 14px; width: 18px; text-align: center; }
-          .sidebar-footer { padding-top: 16px; border-top: 1px solid #1a1a1a; }
+          .sidebar-footer { padding-top: 16px; border-top: 1px solid var(--border); }
 
           .tracker-layout { flex-direction: row; gap: 20px; padding: 24px; align-items: flex-start; }
           .tracker-left { width: 300px; flex-shrink: 0; position: sticky; top: 24px; }

@@ -1021,6 +1021,1983 @@ For entry-level roles:
 • "I want to become a strong sysadmin and eventually move into cloud or security as I gain experience."
 • This is realistic, honest, and shows direction.`,
   },
+
+  // ── LINUX — ADVANCED ────────────────────────────────────────────────────────
+  {
+    id: 41, category: "Linux", difficulty: "Medium",
+    q: "How do you find and kill a process occupying a specific port in Linux?",
+    a: `Step 1 — Find what's listening on the port:
+ss -tulnp | grep :8080
+# or
+lsof -i :8080
+# or (older systems)
+netstat -tulnp | grep :8080
+
+Step 2 — Kill the process:
+kill -15 <PID>    # SIGTERM — graceful shutdown (try first)
+kill -9 <PID>     # SIGKILL — force kill if -15 doesn't work
+
+One-liner:
+sudo fuser -k 8080/tcp
+
+Why -15 before -9:
+• SIGTERM (15) allows the process to clean up: close files, flush buffers, release ports
+• SIGKILL (9) is instant and cannot be caught or ignored — use only if SIGTERM fails`,
+  },
+  {
+    id: 42, category: "Linux", difficulty: "Medium",
+    q: "Explain the Linux boot process from power-on to login prompt.",
+    a: `1. BIOS/UEFI — firmware runs POST (Power-On Self Test), locates the boot device.
+
+2. Bootloader (GRUB2) — loaded from MBR or EFI partition:
+   • Presents the boot menu
+   • Loads the kernel image (vmlinuz) and initramfs into RAM
+
+3. Kernel initialization:
+   • Decompresses itself, detects and initializes hardware
+   • Mounts initramfs (temporary root filesystem with essential drivers)
+   • Hands control to PID 1
+
+4. systemd (PID 1):
+   • First real process in userspace
+   • Reads unit files from /etc/systemd/system/
+   • Starts services in parallel based on dependencies
+   • Reaches the target:
+     - multi-user.target → command-line login
+     - graphical.target → desktop environment
+
+5. getty → login prompt appears on TTY
+
+Key commands:
+journalctl -b          # logs from current boot
+systemd-analyze        # show boot timing
+systemd-analyze blame  # which service took longest`,
+  },
+  {
+    id: 43, category: "Linux", difficulty: "Medium",
+    q: "What are hard links and symbolic (soft) links? What is the difference?",
+    a: `Hard Link:
+• Another directory entry pointing to the SAME inode (same data on disk)
+• If the original filename is deleted, data persists via the hard link
+• Cannot span filesystems; cannot point to directories
+• Create: ln source.txt hardlink.txt
+
+Symbolic Link (symlink / soft link):
+• A file that stores the PATH to the target — like a shortcut
+• If the target is deleted → symlink becomes broken (dangling)
+• Can span filesystems and can point to directories
+• ls -la shows: linkname -> /path/to/target
+• Create: ln -s /path/to/original link_name
+
+Practical examples:
+• ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/myapp
+• Hard links: rsync --link-dest for space-efficient incremental backups`,
+  },
+  {
+    id: 44, category: "Linux", difficulty: "Hard",
+    q: "A Linux server's disk is 100% full. Walk through how you investigate and fix it.",
+    a: `Step 1 — Identify which filesystem is full:
+df -h
+# Look for 100%, note the mount point
+
+Step 2 — Find the largest directories:
+du -sh /* 2>/dev/null | sort -rh | head -20
+du -sh /var/log/* 2>/dev/null | sort -rh | head -10
+
+Step 3 — Common culprits:
+/var/log — logs filling up:
+journalctl --disk-usage
+sudo journalctl --vacuum-size=500M
+sudo journalctl --vacuum-time=7d
+
+/var/lib/docker — Docker bloat:
+docker system df
+docker system prune -af
+
+Deleted files still held open by processes (space not freed until process releases):
+lsof +L1    # shows deleted files still consuming space
+# Restart the process holding the file descriptor
+
+Step 4 — Check inodes too (can run out even with free space):
+df -i
+
+Step 5 — Long-term fix:
+• Set up disk usage alerts (Prometheus node_filesystem_avail_bytes)
+• Configure logrotate for all application logs
+• Limit Docker log size in /etc/docker/daemon.json`,
+  },
+  {
+    id: 45, category: "Linux", difficulty: "Hard",
+    q: "What are Linux namespaces and cgroups, and why do they matter for containers?",
+    a: `These two Linux kernel features are what make containers possible.
+
+Namespaces — provide ISOLATION:
+Each container gets its own isolated view of system resources:
+• pid — container has its own process tree
+• net — its own network interfaces, IP addresses, routing table
+• mnt — its own filesystem mount points
+• uts — its own hostname
+• user — its own user and group IDs (enables rootless containers)
+
+From inside the container: looks like a complete, separate machine.
+From the host: just an isolated Linux process tree.
+
+cgroups (Control Groups) — provide RESOURCE LIMITS:
+• Limit and account for resource usage: CPU, memory, disk I/O, network bandwidth
+• Without cgroups, one container could starve every other container on the host
+• docker run --memory="512m" --cpus="1.0" sets cgroup limits under the hood
+• OOM killer enforces memory limits: exceeds limit → process killed
+
+Summary:
+• Namespaces = what the container can SEE and INTERACT WITH
+• cgroups = how many RESOURCES it can CONSUME
+• No guest OS, no hardware virtualization — containers are just isolated Linux processes`,
+  },
+  {
+    id: 46, category: "Linux", difficulty: "Medium",
+    q: "How do you schedule recurring tasks in Linux? Explain cron syntax.",
+    a: `cron is the standard Linux job scheduler. Edit your crontab with: crontab -e
+
+Syntax — 5 time fields + command:
+┌───── minute (0–59)
+│ ┌─────── hour (0–23)
+│ │ ┌───────── day of month (1–31)
+│ │ │ ┌─────────── month (1–12)
+│ │ │ │ ┌───────────── day of week (0=Sun, 6=Sat)
+* * * * *  /path/to/command
+
+Examples:
+0 2 * * *       /opt/backup.sh       # every day at 2:00 AM
+*/15 * * * *    /opt/check.sh        # every 15 minutes
+0 9 * * 1       /opt/report.sh       # every Monday at 9 AM
+30 6 * * 1-5    /opt/workday.sh      # Mon-Fri at 6:30 AM
+
+Troubleshooting cron:
+• Check cron logs: grep CRON /var/log/syslog
+• Always use FULL paths in cron scripts (PATH is minimal in cron)
+• Redirect output: * * * * * /opt/script.sh >> /var/log/script.log 2>&1
+
+systemd timers (modern alternative):
+• Better logging via journald, more dependencies support
+• List all timers: systemctl list-timers`,
+  },
+  {
+    id: 47, category: "Linux", difficulty: "Easy",
+    q: "How do you check disk usage and manage storage in Linux?",
+    a: `Filesystem usage:
+df -h                    # all filesystems, human-readable sizes
+df -hT                   # includes filesystem type (ext4, xfs, tmpfs)
+df -i                    # inode usage
+
+Directory sizes:
+du -sh /var/log          # size of a specific directory
+du -sh /* 2>/dev/null | sort -rh | head -20
+
+Disk and partition info:
+lsblk                    # block devices: disks, partitions, LVM
+lsblk -f                 # also shows filesystem type and UUID
+blkid                    # UUID and filesystem type of each device
+
+Find large files:
+find / -type f -size +100M -exec ls -lh {} \; 2>/dev/null
+
+Filesystem operations:
+mkfs.ext4 /dev/sdb1      # format a partition as ext4
+mount /dev/sdb1 /mnt/data
+/etc/fstab               # persistent mounts — survives reboots
+
+LVM basics:
+lvdisplay                # list logical volumes
+# Extend a logical volume online:
+lvextend -L +10G /dev/vg0/lv_data
+resize2fs /dev/vg0/lv_data   # ext4
+xfs_growfs /mnt/data         # xfs`,
+  },
+  {
+    id: 48, category: "Linux", difficulty: "Hard",
+    q: "What is the /proc filesystem? Give examples of useful /proc files.",
+    a: `/proc is a virtual filesystem (exists only in RAM) that the kernel uses to expose process and system information as readable files.
+
+Key system-wide files:
+/proc/cpuinfo          # CPU details: model, cores, speed, feature flags
+/proc/meminfo          # RAM totals, available, buffers, cache, swap
+/proc/uptime           # seconds since boot
+/proc/loadavg          # 1/5/15-min load averages
+/proc/mounts           # currently mounted filesystems
+/proc/sys/             # tunable kernel parameters (writable!)
+  /proc/sys/net/ipv4/ip_forward   # IP forwarding: 1=on, 0=off
+  /proc/sys/vm/swappiness         # how eagerly to use swap
+
+Per-process (one directory per PID):
+/proc/<PID>/cmdline    # full command line that started the process
+/proc/<PID>/status     # memory usage, state, UID/GID
+/proc/<PID>/fd/        # symlinks to every open file descriptor
+/proc/<PID>/maps       # memory map (libraries, heap, stack)
+
+Real-world use:
+• sysctl reads/writes /proc/sys: sysctl -w net.ipv4.ip_forward=1
+• ps, top, htop all read from /proc/<PID>/
+• lsof reads /proc/<PID>/fd/ to list open files`,
+  },
+
+  // ── NETWORKING — ADVANCED ───────────────────────────────────────────────────
+  {
+    id: 49, category: "Networking", difficulty: "Medium",
+    q: "What is BGP and when would a sysadmin/DevOps engineer encounter it?",
+    a: `BGP (Border Gateway Protocol) is the routing protocol that powers the internet. It exchanges routing information between autonomous systems (AS) — large networks identified by an ASN.
+
+How it works:
+• Each AS (ISP, cloud provider, large enterprise) announces which IP prefixes it owns
+• BGP routers choose the best path based on: AS-path length, local preference, MED
+
+When a sysadmin encounters BGP:
+• Multi-homing: company has two ISP connections for redundancy — BGP advertises their IP block to both ISPs
+• Cloud connectivity: AWS Direct Connect, GCP Cloud Interconnect, Azure ExpressRoute all use BGP
+• Kubernetes networking: CNI plugins like Calico and MetalLB use BGP for pod IP routing
+• SD-WAN: enterprise WAN fabrics use BGP internally
+
+In GCP specifically:
+Cloud Router uses BGP to dynamically exchange routes with your on-premises router over Cloud VPN or Dedicated Interconnect — without BGP, routes are static only.
+
+BGP issue to know: "BGP route leak" — when a network mistakenly announces another network's prefixes, causing traffic misdirection (major internet outages have been caused by this).`,
+  },
+  {
+    id: 109, category: "Networking", difficulty: "Medium",
+    q: "What is a firewall? Explain stateful vs. stateless packet filtering.",
+    a: `A firewall controls network traffic by allowing or blocking packets based on defined rules.
+
+Stateless Firewall (packet filtering):
+• Evaluates each packet in isolation — no memory of past packets
+• Rules check: source IP, destination IP, protocol, port
+• Must explicitly allow BOTH directions of traffic
+• Fast, but limited — can't distinguish "new connection" from "reply to my request"
+• Examples: simple ACLs on routers, AWS Network ACLs
+
+Stateful Firewall (connection tracking):
+• Tracks the state of active TCP/UDP connections
+• States: NEW, ESTABLISHED, RELATED, INVALID
+• Return traffic for connections you initiated is automatically allowed
+• You write rules only for initiating traffic — vastly more manageable
+• Examples: iptables/nftables, Cisco ASA, AWS Security Groups
+
+Linux iptables (stateful):
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -j DROP
+
+Cloud firewalls:
+• GCP Firewall Rules — stateful, applied via network tags or service accounts
+• AWS Security Groups — stateful (per-instance); NACLs — stateless (per-subnet)`,
+  },
+  {
+    id: 110, category: "Networking", difficulty: "Hard",
+    q: "What is a VPN? Compare IPSec and SSL/TLS VPNs.",
+    a: `A VPN creates an encrypted tunnel over a public network so traffic is private, authenticated, and integrity-protected.
+
+IPSec VPN (Layer 3):
+• Encrypts at the IP packet level — transparent to applications
+• Two modes:
+  - Tunnel mode: entire original packet encrypted (most common — site-to-site)
+  - Transport mode: only payload encrypted (host-to-host)
+• Protocols: IKEv2 (key exchange, UDP 500/4500) + ESP (encryption)
+• Use cases: site-to-site VPNs, GCP Cloud VPN, AWS Site-to-Site VPN
+
+SSL/TLS VPN (Layer 7):
+• Tunnels traffic over HTTPS (port 443) — passes through almost any firewall
+• Easier to deploy for remote users — browser-based or lightweight client
+• Examples: OpenVPN, Cisco AnyConnect
+
+WireGuard (modern, increasingly preferred):
+• Dramatically simpler (~4,000 lines vs ~400,000 for IPSec)
+• State-of-the-art cryptography (ChaCha20, Curve25519)
+• Built into Linux kernel since 5.6
+• Fast handshake, great roaming support
+• Increasingly replacing OpenVPN
+
+Split tunneling:
+• Only traffic for company resources goes through VPN
+• Personal/internet traffic goes direct — reduces VPN server load`,
+  },
+
+  // ── WINDOWS / AD — ADVANCED ─────────────────────────────────────────────────
+  {
+    id: 111, category: "Windows / AD", difficulty: "Hard",
+    q: "Explain Kerberos authentication in Active Directory.",
+    a: `Kerberos is the primary authentication protocol in Active Directory. It uses time-limited tickets so passwords never travel the network.
+
+Key components:
+• KDC (Key Distribution Center) — runs on every Domain Controller:
+  - AS (Authentication Service) — authenticates the user and issues TGTs
+  - TGS (Ticket Granting Service) — issues service tickets on demand
+• TGT (Ticket Granting Ticket) — 10-hour proof that you've already authenticated
+
+Full flow:
+1. User enters password → client computes a key (hash of password)
+2. Client sends AS-REQ to KDC
+3. KDC validates → returns TGT encrypted with the krbtgt account's key
+4. Client stores TGT in memory (view with: klist)
+5. User accesses \\fileserver\share → client sends TGS-REQ with TGT to KDC
+6. KDC issues service ticket encrypted with the file server's account key
+7. Client presents service ticket to the file server → access granted
+8. Password never transmitted on the network
+
+Common issues:
+• Clock skew: clocks must be within 5 minutes → KRB_AP_ERR_SKEW / preauth failures
+• Missing SPN: service won't authenticate (setspn to register)
+
+Security risks:
+• Pass-the-ticket: steal TGT from memory to impersonate user
+• Golden Ticket: forge a TGT using the krbtgt hash — grants unlimited access
+  → Mitigate: rotate krbtgt password twice, use Protected Users group`,
+  },
+  {
+    id: 112, category: "Windows / AD", difficulty: "Medium",
+    q: "What are FSMO roles in Active Directory and why do they matter?",
+    a: `FSMO (Flexible Single Master Operations) roles are AD functions that must run on exactly ONE Domain Controller to prevent conflicts.
+
+Forest-wide (one per forest):
+1. Schema Master — controls all changes to the AD schema
+2. Domain Naming Master — controls adding/removing domains in the forest
+
+Domain-wide (one per domain):
+3. PDC Emulator — MOST important; failure has immediate user impact:
+   • Authoritative for password changes
+   • Domain time master (Kerberos requires <5 min clock skew)
+   • Handles GPO edits and NTLM authentication
+
+4. RID Master — allocates pools of RIDs (Relative Identifiers) to DCs
+   • Every AD object needs a unique SID = domain SID + RID
+   • Failure: DCs eventually can't create new objects
+
+5. Infrastructure Master — updates cross-domain object references
+   • Should NOT be on a Global Catalog server (except in single-domain forests)
+
+Commands:
+netdom query fsmo    # shows which DC holds each role
+Get-ADDomain | Select-Object *Master*   # PowerShell`,
+  },
+  {
+    id: 113, category: "Windows / AD", difficulty: "Medium",
+    q: "How do you troubleshoot Active Directory replication issues?",
+    a: `AD replication keeps all Domain Controllers synchronized. Failure means stale data — users see old passwords, GPOs don't apply.
+
+Step 1 — Check replication status:
+repadmin /showrepl         # replication status per DC, shows errors
+repadmin /replsummary      # summary of all DC replication health
+
+Step 2 — Run AD diagnostics:
+dcdiag /test:replications  # focused replication test
+dcdiag /test:connectivity  # can DCs reach each other?
+
+Step 3 — Force replication:
+repadmin /syncall /AdeP    # force sync all DCs, all partitions
+
+Step 4 — Check Event Viewer on the DC:
+Windows Logs → Directory Service → filter for Error/Warning
+Common error IDs:
+• 1311 — replication configuration problem (no replication path)
+• 1388/1988 — lingering objects
+• 2087/2088 — DNS resolution failure
+
+Step 5 — Check DNS (AD depends entirely on DNS):
+nslookup -type=SRV _ldap._tcp.dc._msdcs.yourdomain.com
+dcdiag /test:dns /v
+
+Step 6 — Check network between DCs:
+Test-NetConnection -Port 389 (LDAP), 135/49152+ (RPC)`,
+  },
+
+  // ── DOCKER ──────────────────────────────────────────────────────────────────
+  {
+    id: 50, category: "Docker", difficulty: "Easy",
+    q: "What is Docker and what problem does it solve?",
+    a: `Docker is a platform for building, shipping, and running applications in containers.
+
+The problem it solves — "it works on my machine":
+• Before containers: dev, staging, and production had different OS/library versions causing unpredictable behavior
+• Docker packages the application + all its dependencies into a container image
+• That image runs identically everywhere: laptop, CI server, cloud VM
+
+Core concepts:
+• Image — read-only, immutable template. Built from a Dockerfile.
+• Container — a running instance of an image. Ephemeral.
+• Dockerfile — instructions to build an image layer by layer
+• Registry — where images are stored (Docker Hub, GCR, ECR)
+
+Key benefits:
+• Portability — same image on every environment
+• Isolation — containers don't interfere with each other or the host OS
+• Speed — starts in milliseconds (vs. minutes for VMs)
+• Reproducibility — the image IS the runtime, no configuration drift
+
+Docker vs. VM:
+• VM: full OS + hypervisor = heavy, minutes to start, GBs of disk
+• Container: shares host OS kernel, just app + deps = lightweight, seconds to start`,
+  },
+  {
+    id: 51, category: "Docker", difficulty: "Easy",
+    q: "What are the most important Docker CLI commands every DevOps engineer should know?",
+    a: `Images:
+docker pull nginx:latest            # pull image from registry
+docker images                       # list local images
+docker build -t myapp:v1 .          # build from Dockerfile in current directory
+docker push myrepo/myapp:v1         # push to registry
+docker rmi image_id                 # remove image
+
+Containers:
+docker run nginx                    # run in foreground
+docker run -d nginx                 # run detached (background)
+docker run -d -p 8080:80 nginx      # map host:8080 to container:80
+docker run -it ubuntu bash          # interactive terminal
+docker run --name web nginx         # give it a name
+docker ps                           # list running containers
+docker ps -a                        # all containers (including stopped)
+docker stop web                     # graceful stop (SIGTERM)
+docker kill web                     # force stop (SIGKILL)
+docker rm web                       # remove stopped container
+docker exec -it web bash            # open shell in running container
+docker logs web                     # view logs
+docker logs -f web                  # follow logs in real-time
+docker stats                        # live resource usage
+
+Cleanup:
+docker system prune -af             # remove ALL unused resources — use carefully in production`,
+  },
+  {
+    id: 52, category: "Docker", difficulty: "Easy",
+    q: "What is a Dockerfile? Walk through a practical example.",
+    a: `A Dockerfile is a text file containing sequential instructions for building a Docker image.
+
+Example — Node.js web application:
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files FIRST — enables Docker layer cache optimization
+COPY package*.json ./
+RUN npm install --production
+
+# Copy the rest of the application
+COPY . .
+
+EXPOSE 3000
+CMD ["node", "server.js"]
+
+Key instructions:
+• FROM — base image (always first line)
+• RUN — executes a shell command during BUILD (creates a new layer)
+• COPY — copies files from the build context into the image
+• WORKDIR — sets the working directory
+• ENV — sets environment variables baked into the image
+• ARG — build-time variables (not available at runtime)
+• EXPOSE — documents which port the app uses
+• CMD — default run command; overridable at runtime
+• ENTRYPOINT — always-run executable; CMD becomes its arguments
+
+Best practices:
+• Use alpine base images to minimize size
+• Chain RUN commands with && to reduce layers
+• Never bake secrets into images`,
+  },
+  {
+    id: 53, category: "Docker", difficulty: "Medium",
+    q: "What is Docker Compose and when would you use it?",
+    a: `Docker Compose is a tool for defining and running multi-container applications using a single docker-compose.yml file.
+
+When to use it:
+• Your app requires multiple services (app + database + cache)
+• Local development environments (spin up everything with one command)
+
+Example — web app + PostgreSQL + Redis:
+version: "3.9"
+services:
+  web:
+    build: .
+    ports:
+      - "8080:3000"
+    environment:
+      DATABASE_URL: postgres://user:pass@db:5432/mydb
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: pass
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  pgdata:
+
+Key commands:
+docker compose up -d             # start all services in background
+docker compose down              # stop and remove containers
+docker compose down -v           # also remove volumes
+docker compose logs -f web       # follow logs for one service
+docker compose exec web sh       # shell into running service
+
+Compose handles automatically: shared bridge network (services reach each other by service name), named volumes, startup ordering.`,
+  },
+  {
+    id: 54, category: "Docker", difficulty: "Medium",
+    q: "What is the difference between CMD and ENTRYPOINT in a Dockerfile?",
+    a: `Both define what command runs when a container starts, but behave differently when overridden.
+
+CMD — default command (fully replaceable):
+• Completely overridden by anything passed to docker run
+• CMD ["node", "server.js"]
+• docker run myimage bash → replaces CMD, runs bash instead
+
+ENTRYPOINT — fixed executable (arguments are appended):
+• The container always runs this executable
+• Arguments to docker run are APPENDED, not replacing it
+• ENTRYPOINT ["node"]
+• docker run myimage server.js → runs: node server.js
+
+Combined pattern (most flexible):
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["postgres"]
+# Runs: docker-entrypoint.sh postgres
+# docker run myimage custom → runs: docker-entrypoint.sh custom
+
+Exec form vs Shell form:
+• Exec form (preferred): CMD ["node", "server.js"] → signals work properly (Ctrl+C works)
+• Shell form: CMD node server.js → runs via /bin/sh -c, signals won't reach process
+
+Override ENTRYPOINT at runtime:
+docker run --entrypoint /bin/sh myimage`,
+  },
+  {
+    id: 55, category: "Docker", difficulty: "Medium",
+    q: "What are Docker volumes and why do they matter?",
+    a: `Containers are ephemeral — all data written inside is lost when the container is removed. Volumes provide persistent storage.
+
+Three storage types:
+
+1. Named Volumes (recommended for production data):
+docker volume create pgdata
+docker run -v pgdata:/var/lib/postgresql/data postgres
+• Managed by Docker, stored in /var/lib/docker/volumes/
+• Survive container removal
+• Best for: databases, anything that must survive restarts
+
+2. Bind Mounts (recommended for development):
+docker run -v $(pwd):/app myapp
+• Maps a specific host directory into the container
+• Changes on the host are immediately visible inside
+• Used for live code reloading during development
+• Not portable — depends on host directory existing
+
+3. tmpfs Mounts (Linux only — in-memory):
+docker run --tmpfs /tmp myapp
+• Data only in RAM, never written to disk
+• For temporary sensitive data
+
+Commands:
+docker volume ls
+docker volume inspect pgdata
+docker volume rm pgdata
+docker volume prune    # remove all volumes not in use
+
+Critical: postgres/mysql/redis data MUST be in a named volume or it's deleted on container removal.`,
+  },
+  {
+    id: 56, category: "Docker", difficulty: "Hard",
+    q: "A container is running but the application inside it isn't responding. How do you debug it?",
+    a: `Step 1 — Check container is actually running:
+docker ps
+docker inspect <container> | grep -i status
+
+Step 2 — Read the logs immediately:
+docker logs <container>
+docker logs --tail=200 -f <container>
+# Look for: stack traces, OOMKills, "address already in use", "connection refused"
+
+Step 3 — Check resource exhaustion:
+docker stats <container>
+# Memory at limit? → OOMKilled. CPU at 100%? → stuck in infinite loop.
+
+Step 4 — Shell into the container:
+docker exec -it <container> bash   # or /bin/sh for alpine
+# Inside: ps aux (is the app running?), df -h (disk full?), curl localhost:<port>
+
+Step 5 — Check networking:
+docker ps    # verify port mapping (0.0.0.0:8080->3000/tcp)
+curl http://localhost:8080
+docker inspect <container> | grep IPAddress
+
+Step 6 — Check exit/crash history:
+docker inspect <container> | grep ExitCode
+# 137 = OOMKilled, 1 = app error, 0 = intentional exit, 127 = command not found
+
+Step 7 — If it restarts too fast to debug:
+# Override the command to keep it alive:
+docker run -it --entrypoint /bin/sh myimage
+# Then manually run the application to see the error interactively`,
+  },
+  {
+    id: 57, category: "Docker", difficulty: "Medium",
+    q: "What is a Docker registry and how do you work with one?",
+    a: `A Docker registry is a server that stores, manages, and distributes Docker images.
+
+Types of registries:
+• Docker Hub — public default (docker.io), free for public images
+• GCR / Artifact Registry — Google Cloud (gcr.io / REGION-docker.pkg.dev)
+• ECR — Amazon Elastic Container Registry
+• Self-hosted — Harbor, GitLab Container Registry
+
+Basic workflow:
+# Build
+docker build -t myapp:v1.0 .
+
+# Tag for your registry
+docker tag myapp:v1.0 gcr.io/my-project/myapp:v1.0
+
+# Authenticate
+gcloud auth configure-docker gcr.io
+docker login    # Docker Hub
+
+# Push
+docker push gcr.io/my-project/myapp:v1.0
+
+# Pull
+docker pull gcr.io/my-project/myapp:v1.0
+
+Image naming convention:
+[registry/][namespace/]repository[:tag]
+gcr.io/my-project/myapp:v1.0
+
+Best practices:
+• Tag images with git commit SHA — makes every build traceable
+• Never rely on "latest" tag in production — it's mutable and not reproducible
+• Scan images for vulnerabilities: Trivy, Snyk, GCP Artifact Analysis
+• Use private registries for proprietary application images`,
+  },
+
+  // ── KUBERNETES ──────────────────────────────────────────────────────────────
+  {
+    id: 60, category: "Kubernetes", difficulty: "Easy",
+    q: "What is Kubernetes and why is it used?",
+    a: `Kubernetes (K8s) is an open-source container orchestration platform that automates the deployment, scaling, and management of containerized applications across a cluster of machines.
+
+Problems it solves:
+• Running hundreds of containers across dozens of servers is complex — K8s handles it
+• Self-healing — automatically restarts failed containers, reschedules on healthy nodes
+• Horizontal scaling — scale pods up/down manually or automatically (HPA)
+• Rolling deployments & rollbacks — deploy new versions with zero downtime
+• Service discovery & load balancing — Services get stable DNS names and IPs
+• Configuration management — Secrets and ConfigMaps decouple config from code
+
+Architecture:
+Control Plane (manages the cluster):
+• API Server — all kubectl commands hit this
+• etcd — the authoritative store for all cluster state
+• Scheduler — decides which node each pod runs on
+• Controller Manager — runs control loops (deployment controller, etc.)
+
+Worker Nodes (run the workloads):
+• kubelet — agent on every node; ensures containers are running
+• kube-proxy — handles network rules for Service load balancing
+• Container runtime — runs containers (containerd)
+
+Managed Kubernetes: GKE (GCP), EKS (AWS), AKS (Azure) manage the Control Plane for you.`,
+  },
+  {
+    id: 61, category: "Kubernetes", difficulty: "Easy",
+    q: "What is the difference between a Pod, a Deployment, and a Service in Kubernetes?",
+    a: `Pod:
+• The smallest deployable unit — one or more containers sharing network and storage
+• Containers in a pod communicate via localhost, share the same IP
+• Pods are ephemeral — if a pod dies, it's gone (a new one gets a new IP)
+• You rarely create pods directly; Deployments manage them
+
+Deployment:
+• A controller that declares: "keep N replicas of this pod running at all times"
+• Manages a ReplicaSet which manages the actual pods
+• Handles: rolling updates, rollbacks, self-healing (replaces crashed pods)
+
+kubectl create deployment web --image=nginx --replicas=3
+kubectl rollout undo deployment/web           # rollback
+kubectl scale deployment/web --replicas=10   # scale
+
+Service:
+• Provides a stable network endpoint (DNS name + ClusterIP) in front of pods
+• Handles load balancing across all matching pod IPs
+• Pods are selected by label selector
+
+Service types:
+• ClusterIP (default) — internal cluster only
+• NodePort — exposes on a port on every node (for dev/testing)
+• LoadBalancer — provisions a cloud load balancer with a public IP (production)
+
+Mental model:
+• Deployment = ensures the RIGHT pods are running and healthy
+• Service = ensures you can ALWAYS REACH those pods, regardless of their IP`,
+  },
+  {
+    id: 62, category: "Kubernetes", difficulty: "Medium",
+    q: "Walk through the most important kubectl commands for daily operations.",
+    a: `Cluster context:
+kubectl config get-contexts            # list available clusters
+kubectl config use-context my-cluster  # switch cluster
+kubectl get nodes                      # node status
+kubectl top nodes                      # CPU/memory per node
+
+Pods:
+kubectl get pods                       # current namespace
+kubectl get pods -n kube-system        # specific namespace
+kubectl get pods -A                    # all namespaces
+kubectl get pods -o wide               # shows node and IP
+kubectl describe pod <name>            # events, conditions — go here for debugging
+kubectl logs <pod>                     # stdout logs
+kubectl logs <pod> -f                  # follow live
+kubectl logs <pod> --previous          # logs from the last crashed container
+kubectl exec -it <pod> -- bash         # open shell
+kubectl delete pod <pod>               # delete pod (Deployment recreates it)
+kubectl port-forward pod/<name> 8080:3000
+
+Deployments:
+kubectl scale deployment <name> --replicas=5
+kubectl set image deployment/<name> app=myimage:v2
+kubectl rollout status deployment/<name>
+kubectl rollout history deployment/<name>
+kubectl rollout undo deployment/<name>
+
+Debugging:
+kubectl get events --sort-by=.lastTimestamp -A
+kubectl apply -f manifest.yaml
+kubectl diff -f manifest.yaml    # preview changes before applying`,
+  },
+  {
+    id: 63, category: "Kubernetes", difficulty: "Medium",
+    q: "What is a ConfigMap and a Secret in Kubernetes? How do they differ?",
+    a: `Both decouple configuration from container images so the same image runs in dev, staging, and prod with different configs.
+
+ConfigMap:
+• Stores non-sensitive configuration: strings, flags, config files
+• Values are plaintext — visible to anyone with read access
+
+Secret:
+• Stores sensitive data: passwords, tokens, TLS certificates
+• Values are base64-encoded (NOT encrypted by default — just encoded)
+• For true encryption: enable etcd encryption or use External Secrets Operator
+
+Create:
+kubectl create configmap app-config --from-literal=ENV=production
+kubectl create secret generic db-creds --from-literal=password=s3cr3t
+
+Using as environment variables:
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db-creds
+        key: password
+  - name: LOG_LEVEL
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: LOG_LEVEL
+
+Using as mounted files:
+volumes:
+  - name: config-vol
+    configMap:
+      name: nginx-conf
+volumeMounts:
+  - mountPath: /etc/nginx/nginx.conf
+    name: config-vol
+    subPath: nginx.conf
+
+Production recommendation:
+Use External Secrets Operator to sync from GCP Secret Manager / AWS Secrets Manager.`,
+  },
+  {
+    id: 64, category: "Kubernetes", difficulty: "Medium",
+    q: "A pod is in CrashLoopBackOff. How do you diagnose and fix it?",
+    a: `CrashLoopBackOff means: the container starts, crashes immediately, K8s restarts it, it crashes again. Restart interval backs off exponentially (10s → 20s → 40s → up to 5 min).
+
+Step 1 — Get context:
+kubectl get pod <name>           # shows restart count
+kubectl describe pod <name>      # scroll to "Events" section
+# Look for: OOMKilled, Error, Failed to pull image, probe failures
+
+Step 2 — Read the crash logs:
+kubectl logs <name>              # current attempt
+kubectl logs <name> --previous   # logs from the PREVIOUS crash (most useful)
+
+Common causes:
+Application error on startup:
+• Wrong env var, missing DATABASE_URL, wrong format
+• Cannot connect to dependency (DB not ready)
+• Missing file or permission issue inside container
+
+OOMKilled:
+• kubectl describe pod shows: "OOMKilled" as Last State reason
+→ Increase memory limit or fix a memory leak
+
+Wrong CMD/ENTRYPOINT (exits immediately):
+• Exit code 0 (no error) or 127 (command not found)
+→ docker run -it <image> /bin/sh locally to test
+
+Missing Secret or ConfigMap:
+• Pod events: "secret not found" or "configmap not found"
+
+Debug trick — keep container alive to inspect it:
+# Add to deployment spec temporarily:
+command: ["sleep", "3600"]
+# Then kubectl exec in and run the application manually`,
+  },
+  {
+    id: 65, category: "Kubernetes", difficulty: "Hard",
+    q: "Explain Kubernetes resource requests and limits. What happens when limits are exceeded?",
+    a: `Resources are defined per container in the pod spec:
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"       # 250 millicores = 0.25 of a CPU core
+  limits:
+    memory: "512Mi"
+    cpu: "1000m"      # 1 full CPU core
+
+Requests — GUARANTEED allocation:
+• Used by the Scheduler to place pods on nodes
+• A node is "full" when total requests = node capacity (even if actual usage is lower)
+
+Limits — MAXIMUM allowed usage:
+
+CPU limits (compressible):
+• Container tries to use more CPU than limit → it is THROTTLED (slows down, not killed)
+
+Memory limits (incompressible):
+• Container exceeds memory limit → OOM KILLED by the kernel immediately
+• kubectl describe pod shows: "OOMKilled"
+• Kubernetes restarts the container → may lead to CrashLoopBackOff
+
+QoS classes (affect eviction priority during node pressure):
+• Guaranteed: requests == limits → never evicted unless node is critically full
+• Burstable: requests < limits → evicted before Guaranteed pods
+• BestEffort: no requests/limits → evicted first
+
+Production rules:
+• Always set requests AND limits on every container
+• Use LimitRange to set defaults per namespace
+• Use ResourceQuota to cap total consumption per namespace
+• Monitor with kubectl top pods`,
+  },
+  {
+    id: 66, category: "Kubernetes", difficulty: "Hard",
+    q: "What is a Kubernetes Ingress? How does it differ from a LoadBalancer Service?",
+    a: `LoadBalancer Service:
+• Provisions one cloud load balancer per Service
+• Each external service gets its own public IP and LB
+• Expensive at scale: 20 microservices = 20 cloud LBs, 20 public IPs
+• Good for non-HTTP services (TCP, gRPC, UDP)
+
+Ingress:
+• A single entry point for all HTTP/HTTPS traffic
+• Routes requests to different Services based on hostname and/or URL path
+• One LoadBalancer/IP serves many services — far cheaper
+• Also handles: TLS termination, redirects, rewrites
+
+Example:
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+spec:
+  tls:
+  - hosts: [api.myapp.com]
+    secretName: tls-secret
+  rules:
+  - host: api.myapp.com
+    http:
+      paths:
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+How it works:
+• An Ingress Controller pod (nginx-ingress, Traefik, GKE managed ingress) watches Ingress objects
+• Configures itself as a proxy with the routing rules
+• TLS termination here; backends use plain HTTP
+
+cert-manager: automates TLS certificate provisioning (Let's Encrypt)
+
+When to use what:
+• HTTP/HTTPS microservices → Ingress (cheaper, central TLS, path routing)
+• Non-HTTP or single large service → LoadBalancer`,
+  },
+  {
+    id: 67, category: "Kubernetes", difficulty: "Medium",
+    q: "What is Kubernetes RBAC and why is it critical for cluster security?",
+    a: `RBAC (Role-Based Access Control) controls what actions each identity can perform on which Kubernetes resources.
+
+Core objects:
+Role (namespace-scoped):
+• Grants permissions within a single namespace
+• Defines: verbs (get, list, create, update, delete) on resources (pods, deployments, secrets)
+
+ClusterRole (cluster-scoped):
+• Applies cluster-wide — used for node management, cluster-level resources
+
+RoleBinding:
+• Binds a Role to a Subject within a namespace
+• Subject types: User, Group, ServiceAccount
+
+Example — read-only pod access:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: staging
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+---
+kind: RoleBinding
+subjects:
+- kind: User
+  name: alice
+roleRef:
+  kind: Role
+  name: pod-reader
+
+ServiceAccounts:
+• Identity for pods/applications that need to call the Kubernetes API
+• Always create dedicated ServiceAccounts with minimal permissions
+• Never use the default ServiceAccount
+
+Debug commands:
+kubectl auth can-i delete pods --namespace=prod
+kubectl auth can-i --list --namespace=prod`,
+  },
+
+  // ── CI/CD ────────────────────────────────────────────────────────────────────
+  {
+    id: 70, category: "CI/CD", difficulty: "Easy",
+    q: "What is CI/CD and what problem does it solve?",
+    a: `CI/CD stands for Continuous Integration / Continuous Delivery (or Deployment).
+
+Problem it solves:
+• Before CI/CD: developers work in isolation for weeks, merge all at once ("integration hell")
+• Deployment is a manual, risky event done rarely
+• With CI/CD: small changes integrated constantly, automated tests catch regressions early
+
+Continuous Integration (CI):
+• Developers push code frequently (many times per day)
+• Every push triggers an automated pipeline:
+  1. Pull the code
+  2. Install dependencies
+  3. Run linting / static analysis
+  4. Run unit tests, integration tests
+  5. Build the artifact (Docker image, JAR, binary)
+• Goal: find bugs at the source, immediately
+
+Continuous Delivery (CD — with approval gate):
+• Every successful CI build is ready for production deployment
+• A human approves the deploy to production
+• Deployment itself is automated once approved
+
+Continuous Deployment (CD — fully automated):
+• Every successful CI build is deployed to production automatically
+• No human gate — requires very high test coverage
+• Used by Netflix, GitHub, Etsy
+
+Tooling: GitHub Actions, GitLab CI/CD, Jenkins, CircleCI, Tekton
+GitOps tools: ArgoCD, Flux (pull-based CD)`,
+  },
+  {
+    id: 71, category: "CI/CD", difficulty: "Easy",
+    q: "What is GitHub Actions? Explain the key concepts: workflow, job, step, and runner.",
+    a: `GitHub Actions is GitHub's built-in CI/CD and automation platform. Workflows are YAML files triggered by GitHub events.
+
+Key concepts:
+Workflow:
+• A YAML file stored in .github/workflows/
+• Triggered by events: push, pull_request, schedule (cron), workflow_dispatch (manual)
+• Contains one or more jobs
+
+Job:
+• A set of steps running together on the same runner machine
+• Jobs run IN PARALLEL by default
+• Use needs: [other-job] for sequential execution
+
+Step:
+• A single task within a job — either:
+  - run: — a shell command
+  - uses: — a reusable Action from the Marketplace
+
+Runner:
+• The virtual machine executing the job
+• GitHub-hosted: ubuntu-latest, windows-latest, macos-latest
+• Self-hosted: your own VM registered to GitHub
+
+Minimal example:
+name: CI Pipeline
+on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm test
+
+Context variables: github.sha, github.ref, github.actor, github.repository`,
+  },
+  {
+    id: 72, category: "CI/CD", difficulty: "Medium",
+    q: "How would you build and push a Docker image to a registry in a GitHub Actions workflow?",
+    a: `Full production-grade example using Docker Hub:
+
+name: Build and Push
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: \${{ secrets.DOCKERHUB_USERNAME }}
+          password: \${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            myuser/myapp:latest
+            myuser/myapp:\${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+Key points:
+• secrets.DOCKERHUB_TOKEN → stored in repo Settings → Secrets (never hardcoded)
+• github.sha → git commit SHA as image tag — every build is uniquely traceable
+• docker/setup-buildx-action → enables BuildKit (faster builds, better caching)
+• cache-from: type=gha → uses GitHub Actions cache for faster rebuilds`,
+  },
+  {
+    id: 73, category: "CI/CD", difficulty: "Medium",
+    q: "What are GitHub Actions secrets and environments? How do you handle credentials safely?",
+    a: `Secrets:
+• Encrypted key-value pairs stored outside the workflow YAML
+• Never appear in plain text in logs (automatically masked with ***)
+• Accessed as: \${{ secrets.MY_SECRET }}
+• Set in: Repository → Settings → Secrets and variables → Actions
+
+Types:
+• Repository secrets — available to all workflows in the repo
+• Organization secrets — shareable across repos in a GitHub org
+• Environment secrets — scoped to a specific deployment environment
+
+Environments:
+• Named deployment targets (staging, production, dev)
+• Each environment can have:
+  - Required reviewers — human approval gate before the job runs
+  - Branch restrictions — only allow deploys from main/release branches
+  - Environment-specific secrets — prod DB password only exists in prod environment
+
+Example:
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production    # triggers approval + uses prod secrets
+    steps:
+      - run: ./deploy.sh
+        env:
+          DB_PASSWORD: \${{ secrets.DB_PASSWORD }}
+
+Best practices:
+1. Use OIDC / Workload Identity Federation instead of long-lived credentials:
+   • GitHub requests a short-lived token from GCP/AWS at runtime
+   • No stored access keys in GitHub
+   • Supported by: google-github-actions/auth, aws-actions/configure-aws-credentials
+
+2. Use environment-scoped secrets so prod credentials are never accessible in dev jobs
+3. Rotate secrets regularly`,
+  },
+  {
+    id: 74, category: "CI/CD", difficulty: "Medium",
+    q: "What is GitOps and how does it differ from traditional CI/CD?",
+    a: `GitOps is a deployment model where Git is the single source of truth for both application code and infrastructure/deployment configuration.
+
+Core principle: if it's not in Git, it doesn't exist. The cluster MUST match what Git says.
+
+Traditional CI/CD (push-based):
+• Pipeline runs → pipeline has credentials → runs kubectl apply directly into the cluster
+• Drift can occur: someone applies a manual fix but Git doesn't reflect it
+• Pipeline needs write access to production — a security risk
+
+GitOps (pull-based):
+• Desired state declared in Git (Kubernetes manifests, Helm values)
+• A GitOps operator (ArgoCD, Flux) runs INSIDE the cluster
+• Operator continuously compares cluster state vs. Git desired state
+• When they drift → operator automatically reconciles the cluster back to Git
+• Production never grants external write access — operator pulls from Git
+
+Benefits:
+• Complete audit trail — every change is a git commit
+• Easy rollback — git revert → cluster reverts automatically
+• Drift detection and self-healing
+• Better security — no external credentials to production cluster
+
+In a GCP/GKE workflow:
+1. Developer merges to main
+2. CI builds and pushes Docker image, updates image tag in manifest repo
+3. ArgoCD detects the change in Git → automatically deploys to GKE
+
+Tools: ArgoCD (popular, web UI), Flux CD (more lightweight, strong Helm support)`,
+  },
+  {
+    id: 75, category: "CI/CD", difficulty: "Hard",
+    q: "A GitHub Actions workflow is failing. How do you debug it?",
+    a: `Step 1 — Read the failure in the Actions UI:
+Repo → Actions → failed run → failed job → expand the failed step
+The error is almost always right there in the step output.
+
+Step 2 — Interpret common exit codes:
+• Exit 1 → command returned failure (look at output above for the actual error)
+• Exit 127 → command not found (tool not installed, typo in command)
+• "Resource not accessible by integration" → GITHUB_TOKEN lacks required permissions
+
+Step 3 — Enable debug logging:
+Add these as repository secrets:
+  ACTIONS_STEP_DEBUG = true          # verbose step-level output
+  ACTIONS_RUNNER_DEBUG = true        # runner agent debug
+Then re-run the failed workflow.
+
+Step 4 — Add explicit debug steps:
+- name: Debug context
+  run: |
+    echo "Working dir: $(pwd)"
+    ls -la
+    env | sort
+    which docker && docker --version
+
+Step 5 — Common causes and fixes:
+• Secrets missing/misspelled → name is case-sensitive, check it's set for the right env
+• File not found → wrong working-directory, or forgot actions/checkout first
+• Script not executable → add: run: chmod +x deploy.sh before using it
+• Docker push fails → registry auth expired, wrong tag, no imagePullSecrets
+• Timeout → add timeout-minutes: 30 to the job
+
+Step 6 — Check workflow permissions:
+permissions:
+  contents: read
+  packages: write      # needed to push to GitHub Container Registry
+  id-token: write      # needed for OIDC auth to GCP/AWS`,
+  },
+  {
+    id: 76, category: "CI/CD", difficulty: "Medium",
+    q: "What are blue/green and canary deployment strategies?",
+    a: `Rolling Update (Kubernetes default):
+• Replaces old pods with new ones progressively
+• Old and new versions run simultaneously during the rollout
+• Zero downtime if health checks pass
+• Simplest — no extra infrastructure needed
+
+Blue/Green:
+• Two identical environments: Blue (current) and Green (new version)
+• Deploy new version to Green completely; test it while Blue serves all traffic
+• When satisfied: switch traffic (one DNS change or LB target group swap)
+• Instant rollback: switch back to Blue
+• Pros: instant cutover, instant rollback
+• Cons: 2× infrastructure cost during transition
+
+Canary:
+• Route a small percentage of real traffic to the new version (e.g., 5%)
+• Monitor error rate, latency, business metrics on the canary
+• If healthy: progressively increase traffic (5% → 25% → 50% → 100%)
+• If problems: route all traffic back immediately
+• Pros: real user validation, minimal blast radius
+• Cons: more complex, need good observability
+
+In Kubernetes:
+• Rolling: built-in Deployment RollingUpdate strategy
+• Blue/Green: two Deployments, one Service — switch Service's label selector
+• Canary: Argo Rollouts or Flagger automates traffic splitting + automated analysis`,
+  },
+
+  // ── BASH SCRIPTING ───────────────────────────────────────────────────────────
+  {
+    id: 80, category: "Bash", difficulty: "Easy",
+    q: "What are the core Bash scripting constructs a sysadmin must know?",
+    a: `Shebang and safety:
+#!/bin/bash
+set -euo pipefail    # e=exit on error, u=error on unset var, o pipefail=catch pipe errors
+
+Variables:
+NAME="world"
+echo "Hello, $NAME"
+RESULT=$(command)            # command substitution — captures output
+CALC=$((10 + 5))             # arithmetic
+
+Conditionals:
+if [ -f "/etc/nginx/nginx.conf" ]; then
+  echo "Nginx config exists"
+elif [ -d "/etc/apache2" ]; then
+  echo "Apache exists"
+else
+  echo "Neither found"
+fi
+
+Test operators:
+-f file    # file exists and is regular file
+-d dir     # directory exists
+-z "$var"  # variable is empty
+-n "$var"  # variable is not empty
+
+Loops:
+for host in web1 web2 db1; do ssh "$host" "uptime"; done
+for f in /var/log/*.log; do echo "Processing $f"; done
+while read -r line; do echo "$line"; done < /etc/hosts
+
+Functions:
+log() {
+  echo "[$(date +%Y-%m-%d\ %H:%M:%S)] $*"
+}
+log "Script started"
+
+Exit codes:
+$?         # exit code of last command (0 = success)
+exit 1     # signal failure to caller`,
+  },
+  {
+    id: 81, category: "Bash", difficulty: "Medium",
+    q: "Write a Bash script that checks if a list of servers is reachable and logs results.",
+    a: `#!/bin/bash
+set -euo pipefail
+
+HOSTS=("web1.example.com" "web2.example.com" "db1.example.com" "10.0.0.50")
+LOG="/var/log/host_check.log"
+FAILED=0
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
+}
+
+log "=== Host check started ==="
+
+for host in "\${HOSTS[@]}"; do
+  if ping -c 1 -W 2 "$host" &>/dev/null; then
+    log "OK   $host"
+  else
+    log "FAIL $host — unreachable"
+    FAILED=$((FAILED + 1))
+  fi
+done
+
+log "=== Done: $FAILED host(s) unreachable ==="
+
+if [ "$FAILED" -gt 0 ]; then
+  exit 1    # signals failure to cron / calling process
+fi
+
+Concepts demonstrated:
+• Array: HOSTS=(...), iterate with "\${HOSTS[@]}"
+• ping -c 1 = one packet; -W 2 = 2-second timeout
+• &>/dev/null = redirect stdout AND stderr to /dev/null
+• tee -a = write to stdout AND append to log file
+• Arithmetic: $((FAILED + 1))
+• Meaningful exit code: 0 = all healthy, 1 = at least one failed
+
+Schedule with cron:
+*/5 * * * * /opt/scripts/check_hosts.sh`,
+  },
+  {
+    id: 82, category: "Bash", difficulty: "Medium",
+    q: "How do you use grep, awk, and sed for text processing in sysadmin work?",
+    a: `grep — filter and search lines:
+grep "error" /var/log/syslog             # lines containing "error"
+grep -i "error" /var/log/syslog          # case-insensitive
+grep -v "debug" /var/log/app.log         # invert: lines NOT matching
+grep -r "TODO" /app/src/                 # recursive search
+grep -E "error|warn|crit" file           # multiple patterns (OR)
+grep -n "error" file                     # show line numbers
+grep -A 3 "Exception" file               # 3 lines AFTER each match
+
+awk — field/column extraction:
+awk '{print $1}' file                    # print first field
+awk -F: '{print $1, $3}' /etc/passwd     # colon delimiter; print username and UID
+awk '$3 > 1000 {print $1}' /etc/passwd   # conditional: print names where UID > 1000
+df -h | awk 'NR>1 {print $5, $6}'        # skip header, print % used + mount
+ps aux | awk 'NR>1 {sum += $3} END {print "Total CPU%:", sum}'
+
+sed — stream editor: find/replace:
+sed 's/foo/bar/' file                    # replace first occurrence per line
+sed 's/foo/bar/g' file                   # replace ALL occurrences
+sed -i 's/old_host/new_host/g' config    # edit file IN PLACE (backup first!)
+sed '/^#/d' file                         # delete comment lines
+sed -n '10,20p' file                     # print only lines 10-20
+
+Powerful pipeline:
+journalctl -u nginx --since "1 hour ago" \
+  | grep -i "error|warn" \
+  | awk '{print $1, $2, $3, $NF}' \
+  | sort | uniq -c | sort -rn | head -20`,
+  },
+  {
+    id: 83, category: "Bash", difficulty: "Medium",
+    q: "Write a Bash script to clean up old log files and compress recent ones.",
+    a: `#!/bin/bash
+set -euo pipefail
+
+LOG_DIR="/var/log/myapp"
+SCRIPT_LOG="/var/log/log_cleanup.log"
+KEEP_DAYS=30
+COMPRESS_DAYS=7
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$SCRIPT_LOG"
+}
+
+log "Starting log cleanup"
+
+if [ ! -d "$LOG_DIR" ]; then
+  log "ERROR: $LOG_DIR does not exist"
+  exit 1
+fi
+
+# Count files to delete
+DELETE_COUNT=$(find "$LOG_DIR" -maxdepth 1 -name "*.log" -mtime +"$KEEP_DAYS" | wc -l)
+
+# Delete files older than KEEP_DAYS
+find "$LOG_DIR" -maxdepth 1 -name "*.log" -mtime +"$KEEP_DAYS" -exec rm -f {} \;
+log "Deleted $DELETE_COUNT files older than \${KEEP_DAYS} days"
+
+# Compress files older than COMPRESS_DAYS (not already compressed)
+find "$LOG_DIR" -maxdepth 1 -name "*.log" -mtime +"$COMPRESS_DAYS" ! -name "*.gz" \
+  -exec gzip -9 {} \;
+log "Compressed log files older than \${COMPRESS_DAYS} days"
+
+DISK=$(du -sh "$LOG_DIR" | cut -f1)
+log "Log directory size after cleanup: $DISK"
+
+Key find options:
+-maxdepth 1  → don't recurse into subdirectories
+-mtime +30   → modified MORE than 30 days ago
+! -name "*.gz" → exclude already compressed files
+
+Dry run test:
+find "$LOG_DIR" -name "*.log" -mtime +"$KEEP_DAYS" -exec echo "Would delete: {}" \;
+
+Schedule: 0 2 * * * /opt/scripts/log_cleanup.sh`,
+  },
+  {
+    id: 84, category: "Bash", difficulty: "Hard",
+    q: "What are common Bash scripting pitfalls and how do you avoid them?",
+    a: `1. Not quoting variables — causes word splitting and glob expansion:
+BAD:  cp $file /backup/
+GOOD: cp "$file" "/backup/"
+
+2. Not using set -euo pipefail:
+BAD:  cp file /backup; echo "Done"   # "Done" prints even if cp failed
+GOOD: set -euo pipefail at the top of every script
+
+3. Parsing ls output — breaks on spaces in filenames:
+BAD:  for f in $(ls /tmp/*.log); do ...
+GOOD: for f in /tmp/*.log; do ...    # glob is safe
+
+4. Missing local in functions:
+GOOD: local tmp="$1"    # always use local for function variables
+
+5. Backticks instead of $():
+BAD:  RESULT=\`some_command\`
+GOOD: RESULT=$(some_command)    # nestable: $(outer $(inner))
+
+6. Command injection via untrusted input:
+BAD:  eval "ls $USER_INPUT"    # could be: "; rm -rf /"
+GOOD: Never use eval with user-provided data
+
+7. Missing error handling:
+GOOD: result=$(some_command) || { echo "Failed"; exit 1; }
+
+8. Not initializing variables:
+GOOD: COUNTER=0; COUNTER=$((COUNTER + 1))
+
+Testing tools:
+bash -n script.sh    # syntax check only
+bash -x script.sh    # trace every command (debug mode)
+shellcheck script.sh # static analysis tool for bash scripts`,
+  },
+  {
+    id: 85, category: "Bash", difficulty: "Medium",
+    q: "How do you pass arguments to a Bash script and validate them?",
+    a: `Positional parameters:
+$0  = script name
+$1  = first argument
+$2  = second argument
+$@  = all arguments as separate quoted words (safe to iterate)
+$#  = number of arguments provided
+
+Example with validation:
+#!/bin/bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 <environment> <action>"
+  echo "  Environments: dev | staging | prod"
+  exit 1
+}
+
+if [ "$#" -ne 2 ]; then
+  echo "Error: expected 2 arguments, got $#."
+  usage
+fi
+
+ENV="$1"
+ACTION="$2"
+
+case "$ENV" in
+  dev|staging|prod)
+    ;;   # valid, continue
+  *)
+    echo "Invalid environment: '$ENV'"
+    usage
+    ;;
+esac
+
+echo "Running '$ACTION' on '$ENV'..."
+
+Named/optional arguments with getopts:
+while getopts "e:a:vh" opt; do
+  case $opt in
+    e) ENV="$OPTARG" ;;
+    a) ACTION="$OPTARG" ;;
+    v) VERBOSE=true ;;
+    h) usage ;;
+    ?) usage ;;
+  esac
+done
+# ./deploy.sh -e prod -a restart -v`,
+  },
+  {
+    id: 86, category: "Bash", difficulty: "Hard",
+    q: "How do you safely handle secrets and sensitive data in Bash scripts?",
+    a: `Rule #1: NEVER hardcode secrets in scripts. They end up in git history, process lists, and log files.
+
+Method 1 — Environment variables (most common):
+source /etc/myapp/secrets.env    # file contains: export DB_PASSWORD="secret"
+# Protect the file:
+chmod 600 /etc/myapp/secrets.env
+chown myapp:myapp /etc/myapp/secrets.env
+# Add secrets.env to .gitignore — NEVER commit it
+
+Method 2 — Read from a file at runtime:
+DB_PASSWORD=$(< /run/secrets/db_password)   # Docker secrets or k8s secret mount
+
+Method 3 — Pull from a secret manager:
+# GCP Secret Manager:
+DB_PASSWORD=$(gcloud secrets versions access latest --secret="db-password")
+
+# AWS SSM Parameter Store:
+DB_PASSWORD=$(aws ssm get-parameter --name "/myapp/db_password" --with-decryption --query Parameter.Value --output text)
+
+Prevent leaking in logs:
+set +x    # disable bash -x tracing around secret operations
+# Never echo secrets: echo "Password: $DB_PASSWORD" ← never
+
+Avoid passing on command line (visible in ps aux):
+BAD:  mysql -u root -p"$DB_PASSWORD"    # visible to other users via ps
+GOOD: Use MySQL config file: ~/.my.cnf with [client] password=...
+GOOD: export PGPASSWORD="$DB_PASSWORD"; psql -U admin mydb`,
+  },
+
+  // ── MONITORING & LOGGING ────────────────────────────────────────────────────
+  {
+    id: 90, category: "Monitoring", difficulty: "Easy",
+    q: "What is the difference between monitoring, logging, and distributed tracing?",
+    a: `These are the three pillars of observability — together they let you understand what's happening inside your systems.
+
+Monitoring (Metrics):
+• Collecting numerical measurements over time (time-series data)
+• Examples: CPU %, HTTP request rate (req/s), error rate, latency (ms)
+• Answers: "Is the system healthy? Is it exceeding a threshold?"
+• Triggers alerts when thresholds are crossed
+• Tools: Prometheus + Grafana, Datadog, CloudWatch, GCP Cloud Monitoring
+
+Logging:
+• Capturing discrete events that occurred (timestamped text records)
+• Examples: "2024-01-15 14:32:01 ERROR: database connection refused"
+• Answers: "What happened, exactly, and when?"
+• Essential for debugging individual issues
+• Tools: ELK Stack, Grafana Loki, Splunk, GCP Cloud Logging
+
+Distributed Tracing:
+• Tracks the journey of a single request as it flows through multiple microservices
+• Each service adds a span with timing; all spans share a trace ID
+• Answers: "Where is the latency? Which service is the bottleneck?"
+• Essential in microservices where one user action hits 5-10 services
+• Tools: Jaeger, Zipkin, Google Cloud Trace, Datadog APM, OpenTelemetry
+
+Why all three together:
+• Monitoring: tells you THERE IS A FIRE (error rate spike)
+• Logging: tells you WHAT CAUSED THE FIRE (specific error messages)
+• Tracing: tells you WHERE IT STARTED (which service introduced the latency)`,
+  },
+  {
+    id: 91, category: "Monitoring", difficulty: "Medium",
+    q: "How does Prometheus work? Explain metrics, exporters, and the scrape model.",
+    a: `Prometheus is an open-source time-series monitoring system that PULLS (scrapes) metrics from targets over HTTP.
+
+Flow:
+1. Targets expose metrics at GET /metrics (text-format)
+2. Prometheus scrape_config lists which targets to scrape and how often (e.g., every 15s)
+3. Prometheus scrapes, stores data in its local TSDB
+4. Query with PromQL; Grafana visualizes; Alertmanager fires alerts
+
+Metric types:
+• Counter — only increases (total requests, total errors): http_requests_total
+• Gauge — can go up or down (current memory use): node_memory_MemAvailable_bytes
+• Histogram — distribution in buckets (request duration): http_request_duration_seconds_bucket
+• Summary — calculates quantiles client-side
+
+Exporters — translate service metrics into Prometheus format:
+• node_exporter — host-level: CPU, memory, disk, network
+• blackbox_exporter — probes endpoints: is URL up? TLS valid?
+• kube-state-metrics — K8s object state: pod running? deployment replicas?
+• mysql_exporter, postgres_exporter, redis_exporter — database metrics
+
+Essential PromQL:
+# CPU usage %:
+100 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
+
+# HTTP error rate:
+rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100
+
+# Request rate per second:
+rate(http_requests_total[5m])`,
+  },
+  {
+    id: 92, category: "Monitoring", difficulty: "Medium",
+    q: "What is Grafana and how does it work with Prometheus?",
+    a: `Grafana is an open-source visualization and dashboarding platform.
+
+Relationship with Prometheus:
+• Prometheus = the database (stores time-series data, handles scraping and alerting)
+• Grafana = the frontend (queries Prometheus with PromQL and renders visualizations)
+• Almost always deployed together
+
+How Grafana works:
+1. Configure a data source (Prometheus URL)
+2. Create a dashboard with panels
+3. Each panel has a PromQL query → rendered as graph, stat, gauge, table
+4. Add variables (dropdowns) to filter by instance, namespace, service
+5. Set alerts on panels → route to Slack/PagerDuty/email
+
+Key concepts:
+• Data source — connection to: Prometheus, Loki, Elasticsearch, CloudWatch, MySQL
+• Dashboard — collection of panels organized into rows
+• Panel — single visualization with a query
+• Variable — dynamic dropdown ($namespace, $instance)
+
+Pre-built dashboards (import from grafana.com):
+• ID 1860 — Node Exporter Full (CPU, memory, disk per host)
+• ID 3119 — Kubernetes cluster monitoring
+• ID 7362 — PostgreSQL metrics
+
+kube-prometheus-stack Helm chart:
+• Installs Prometheus + Grafana + Alertmanager + node_exporter + kube-state-metrics in one chart
+• Pre-configured Kubernetes dashboards included
+• Standard starting point for K8s monitoring`,
+  },
+  {
+    id: 93, category: "Monitoring", difficulty: "Medium",
+    q: "What is the ELK Stack? How does log aggregation work in a microservices environment?",
+    a: `ELK Stack (now Elastic Stack) is a centralized log management platform:
+
+Elasticsearch:
+• Distributed search and analytics engine
+• Stores and indexes log data as JSON documents
+• Enables fast full-text search across billions of records
+• REST API: GET /index/_search?q=error
+
+Logstash:
+• Data pipeline: collects logs → transforms/parses → ships to Elasticsearch
+• Grok filter: parses unstructured text (nginx logs) into structured fields
+• Input: file, syslog, Beats, Kafka
+
+Kibana:
+• Web UI for searching and visualizing data in Elasticsearch
+• Discover: search raw logs; Visualize: charts; Dashboard: combined views
+
+Filebeat:
+• Lightweight agent on every server/container
+• Tails log files, ships to Logstash or Elasticsearch directly
+• Much lighter than Logstash — runs on every node
+
+Modern alternative for Kubernetes — Grafana Loki:
+• Stores log streams indexed by labels only (not full-text) — cheaper
+• Query with LogQL (similar to PromQL)
+• Works natively with Grafana; Promtail agent ships logs from pods
+• Better suited for K8s where pods are ephemeral
+
+GCP equivalent: Cloud Logging (Stackdriver) — auto-collects GKE pod logs, routes to BigQuery or Pub/Sub`,
+  },
+  {
+    id: 94, category: "Monitoring", difficulty: "Hard",
+    q: "How do you write a Prometheus alert rule? Walk through the syntax.",
+    a: `Alert rules are YAML files that Prometheus loads (configured via rule_files: in prometheus.yml).
+
+Full example:
+groups:
+  - name: infrastructure-alerts
+    interval: 1m
+    rules:
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance)(
+            rate(node_cpu_seconds_total{mode="idle"}[5m])
+          ) * 100) > 85
+        for: 5m    # must stay true for 5 min before firing (prevents flapping)
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% for 5+ minutes"
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+           / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100 < 10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk almost full on {{ $labels.instance }}"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 15 > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash-looping"
+
+Key fields:
+• expr — PromQL expression; alert fires when this evaluates to non-zero
+• for — "pending" duration; must stay true this long to avoid noise from transient spikes
+• labels.severity — used by Alertmanager routing rules
+• annotations — human-readable info; $labels.* and $value are templated
+
+Alertmanager routes alerts based on labels to Slack, PagerDuty, email, etc.`,
+  },
+  {
+    id: 95, category: "Monitoring", difficulty: "Easy",
+    q: "What are SLIs, SLOs, and SLAs? Why do they matter for monitoring and on-call?",
+    a: `These come from Google's SRE book and define how reliable a service needs to be.
+
+SLI — Service Level Indicator:
+• A specific, measurable metric that quantifies one aspect of reliability
+• Must be a ratio/percentage (0% = totally broken, 100% = perfect)
+• Examples:
+  - Availability: successful requests / all requests × 100
+  - Latency: requests served in < 300ms / all requests × 100
+  - Error rate: 100 − (error responses / all responses × 100)
+
+SLO — Service Level Objective:
+• The TARGET value for an SLI — internal goal
+• Example: "99.9% of requests will succeed" or "p99 latency < 500ms"
+
+Error Budget:
+• Budget = 100% − SLO target
+• 99.9% SLO = 0.1% allowed failures = ~43 minutes of downtime per month
+• Empty error budget = no more risky deployments until it refills
+
+SLA — Service Level Agreement:
+• A LEGAL/CONTRACTUAL commitment to customers
+• Usually less strict than your SLO (you need internal headroom)
+• Breach = financial compensation / service credits
+• Example: AWS S3 SLA = 99.9% monthly uptime
+
+Why it matters for monitoring:
+• Alert on SLO burn rate, not arbitrary thresholds
+• "Alert when error budget will be exhausted in 2 hours at current rate" = meaningful
+• "Alert when CPU > 80%" = not necessarily meaningful (may not impact users)
+• SLO-based alerting → fewer false alarms, more actionable pages`,
+  },
+
+  // ── INCIDENT RESPONSE ────────────────────────────────────────────────────────
+  {
+    id: 100, category: "Incident Response", difficulty: "Easy",
+    q: "What is an incident response process? Walk through the lifecycle of a production incident.",
+    a: `An incident is any unplanned interruption or degradation to a production service.
+
+Lifecycle:
+
+1. Detection:
+   • Monitoring alert fires (Prometheus/Alertmanager, PagerDuty, Datadog)
+   • User report via support ticket or Slack
+   • Automated synthetic check fails
+
+2. Acknowledge:
+   • On-call engineer ACKs the alert → stops escalation
+   • Quick assessment: what's broken? how many users? what severity?
+   • P1 (critical) → page additional people immediately
+
+3. Communicate (even before you know the answer):
+   • Post in #incidents: "Investigating elevated errors on checkout API. Update in 10 min."
+   • Update status page
+
+4. Mitigate (restore service — this is the priority):
+   • Stop the bleeding FIRST, find the root cause AFTER
+   • Rollback a bad deploy, scale up, re-route traffic, toggle a feature flag
+
+5. Investigate:
+   • Check dashboards, logs, traces
+   • "What changed right before this started?"
+
+6. Resolve + communicate resolution:
+   • Update status page: "Resolved at 14:37 UTC"
+
+7. Post-Incident Review (Postmortem):
+   • Blameless analysis: what happened, why, timeline, action items
+   • Written within 24-48 hours while fresh`,
+  },
+  {
+    id: 101, category: "Incident Response", difficulty: "Medium",
+    q: "Production is down. Walk through your first 5 minutes as the on-call engineer.",
+    a: `Minute 0-1 — Acknowledge and Orient:
+• ACK the alert in PagerDuty/OpsGenie (stops escalation timer)
+• Open monitoring dashboard — what metric triggered? Error rate? Latency?
+• Post immediately in #incidents: "Investigating [alert name] — will update in 5 min"
+• Is it one service, one region, or everything?
+
+Minute 1-2 — Check "What Changed?":
+• Any deploy in the last 30 minutes? (GitHub Actions, ArgoCD)
+• Any infrastructure changes? (Terraform runs, config changes, certificate rotation)
+• The #1 cause of production incidents: something changed right before it broke
+
+Minute 2-3 — Diagnose by layer:
+• Application: kubectl get pods -A | grep -v Running → CrashLoopBackOff?
+• Logs: kubectl logs <pod> --previous — stack traces, "connection refused", OOMKilled?
+• Database: is the DB reachable? Connection pool exhausted?
+• DNS: dig mysite.com — still resolving correctly?
+
+Minute 3-4 — Mitigate if cause is clear:
+kubectl rollout undo deployment/web         # rollback bad deploy
+kubectl scale deployment/web --replicas=10  # scale for traffic spike
+kubectl delete pod <crashing-pod>           # restart misbehaving pod
+
+Minute 4-5 — Communicate and escalate:
+• Update #incidents: "Root cause appears to be X. Rolling back deploy from 14:22."
+• If stuck → page additional help NOW. No hero solo acts.
+
+Rule: communicate often, communicate early. "I don't know yet but I'm investigating" is valuable.`,
+  },
+  {
+    id: 102, category: "Incident Response", difficulty: "Medium",
+    q: "What is a blameless postmortem and what should it include?",
+    a: `A postmortem is a structured analysis written after an incident to understand what happened and prevent recurrence.
+
+"Blameless" means:
+• The goal is to fix SYSTEMS and PROCESSES — not to punish individuals
+• Mistakes are expected; good systems prevent those mistakes from causing outages
+• Psychological safety is critical — people share what actually happened
+• Pioneered by Google SRE, now standard in mature DevOps orgs
+
+Structure:
+1. Incident Summary
+   • What happened, when, how long, how many users/services affected
+
+2. Timeline (specific timestamps):
+   • When issue started, when monitoring detected it, when paged, each action taken, when resolved
+
+3. Root Cause Analysis:
+   • The technical cause — WHY did it break?
+
+4. Contributing Factors:
+   • What conditions allowed this? Missing test? No canary? Alert not configured?
+
+5. What Went Well:
+   • Rollback was fast, runbook was accurate, communication was clear
+
+6. What Went Poorly:
+   • Alert fired 20 minutes after the issue started, runbook was outdated
+
+7. Action Items (most important):
+   Each item has: description, owner, due date, priority
+   Examples:
+   • "Add integration test for DB connection failure" — @alice — 2 weeks
+   • "Configure error rate alert on checkout-api" — @bob — 1 week
+   • "Update rollback runbook" — @carol — 3 days`,
+  },
+  {
+    id: 103, category: "Incident Response", difficulty: "Medium",
+    q: "A bad deployment caused a production outage. What do you do?",
+    a: `Priority: RESTORE SERVICE first, INVESTIGATE second.
+
+Step 1 — Confirm it's the deployment:
+• Did the incident start within minutes of the deploy? Almost certainly related.
+kubectl rollout history deployment/web    # confirm deploy time matches incident start
+
+Step 2 — Roll back immediately:
+# Kubernetes:
+kubectl rollout undo deployment/web
+kubectl rollout status deployment/web    # watch pods roll out
+
+# Helm:
+helm rollback myapp                      # to previous release
+
+# ArgoCD (GitOps):
+• Revert the commit in the manifest repo OR click Rollback in ArgoCD UI
+
+Step 3 — Verify service is restored:
+• Watch error rate in Grafana — should drop to baseline
+• Check kubectl get pods — all running, 0 restarts
+• curl -f https://myapp.com/health
+
+Step 4 — Communicate:
+"14:45 UTC: Rolled back to previous version. Service is restoring. Monitoring closely."
+
+Step 5 — Post-rollback investigation:
+• What changed in the PR? (git diff previous-version..bad-version)
+• Why didn't staging catch it?
+• Write a test to cover the regression
+
+Step 6 — Improve the pipeline:
+• Bug detectable by test → add the test to CI
+• Rollout was too fast → add canary deployment
+• Rollback was slow → automate rollback on failed health checks`,
+  },
+  {
+    id: 104, category: "Incident Response", difficulty: "Hard",
+    q: "How do you diagnose a memory leak in a production application?",
+    a: `Memory leaks cause gradual memory growth that never returns to baseline, eventually causing OOMKills.
+
+Step 1 — Confirm it's a leak:
+• Open Grafana, look at memory over 24-48 hours
+• Leak pattern: steady upward trend that never drops back
+• Normal: spikes with traffic, returns to baseline after
+
+Step 2 — Identify the leaking container:
+kubectl top pods --containers
+kubectl describe pod <name>    # check Last State for OOMKilled history
+
+Step 3 — Language-specific profiling:
+
+Node.js:
+• Enable --inspect flag → attach Chrome DevTools → take heap snapshots over time
+• Use clinic.js or memwatch-next library
+
+Python:
+• tracemalloc.start(); snapshot = tracemalloc.take_snapshot()
+• memory_profiler + @profile decorator
+
+Java:
+• jmap -heap <PID> → heap summary
+• Generate heap dump: jmap -dump:format=b,file=heap.hprof <PID>
+• Analyze with Eclipse MAT — look for objects with many retained references
+
+Go:
+• pprof endpoint: /debug/pprof/heap
+• go tool pprof http://localhost:6060/debug/pprof/heap
+
+Step 4 — Mitigate while fixing:
+• Set memory limits in K8s — OOMKill restarts pod before it takes down the node
+• Scale horizontally — more pods, each leaks slower relative to total
+
+Step 5 — Fix and verify:
+• Fix root cause (unclosed DB connections, growing cache, event listener leaks)
+• Add a memory usage test in CI (run under load for X minutes, assert memory stays flat)`,
+  },
+  {
+    id: 105, category: "Incident Response", difficulty: "Hard",
+    q: "How do you investigate high latency in a distributed microservices application?",
+    a: `Step 1 — Define the problem precisely:
+• Is it p50 (everyone slow) or p99 (occasional slowness)?
+• All requests or specific endpoints? All users or specific region?
+• When did it start? What changed?
+
+Step 2 — Start with distributed tracing (most efficient):
+• Tools: Jaeger, Zipkin, Google Cloud Trace, Datadog APM
+• Sample a slow trace — where does the time go? Which span is slow?
+• Common finds: slow DB query, external API timeout, N+1 query problem
+
+Step 3 — Check infrastructure:
+# CPU saturation — requests queuing:
+kubectl top pods; top on the node
+
+# Disk I/O — affecting DB:
+iostat -x 1 5
+
+# Network packet loss:
+netstat -s | grep retransmit
+
+Step 4 — Check the database:
+# Postgres slow queries:
+SELECT pid, now() - query_start AS duration, query
+FROM pg_stat_activity WHERE state = 'active'
+ORDER BY duration DESC LIMIT 10;
+EXPLAIN ANALYZE SELECT ...    # check query plan — missing index?
+
+Step 5 — Check for resource exhaustion:
+• Thread pool full? App queuing requests
+• DB connection pool exhausted? App waits for a free connection
+• Circuit breaker open?
+
+Step 6 — Mitigate:
+• Add caching (Redis) to reduce DB round-trips
+• Add a missing database index
+• Scale up the slow service horizontally
+• Add timeouts and circuit breakers to prevent cascade`,
+  },
+  {
+    id: 106, category: "Incident Response", difficulty: "Medium",
+    q: "What does good on-call hygiene look like? How do you avoid on-call burnout?",
+    a: `On-call rotation = taking turns being first responder for production incidents, typically 24/7 for a week at a time.
+
+Alert quality (most important):
+• Every alert must be actionable — if no action needed, don't page someone for it
+• Each alert links to a runbook
+• Regularly prune noisy alerts — if same alert fires and resolves on its own > 2x/week, fix it
+• Alert on symptoms (high error rate, latency > SLO), not causes (high CPU — doesn't always mean user impact)
+
+Runbooks:
+• Step-by-step playbooks for common incident types stored in a wiki
+• "If this alert fires, do exactly these steps" — reduces cognitive load at 2 AM
+• Keep them up to date — stale runbooks are worse than none
+• Include: who to escalate to, relevant dashboard links, commands to run
+
+Shift handoff:
+• At end of on-call shift: write a handoff note covering active issues, recent incidents
+• Use a dedicated #oncall-handoff channel
+
+Sustainable on-call (from Google SRE book):
+• Track paging load: ideally < 2 incidents per on-call shift requiring human action
+• Operations work < 50% of on-call time; rest is for elimination work
+• If the same thing keeps paging → fix it permanently, don't just keep restarting it
+• Offer comp time after a hard on-call week
+
+Tools: PagerDuty, OpsGenie, Squadcast, Grafana OnCall — manage rotations and escalation policies`,
+  },
 ];
 
 // ── CHEAT SHEETS ──────────────────────────────────────────────────────────────
