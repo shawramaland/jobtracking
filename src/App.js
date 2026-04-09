@@ -3,6 +3,7 @@ import * as Tone from "tone";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import PrepTab from "./PrepTab";
+import FeedbackTab from "./FeedbackTab";
 
 // Local storage wrapper for browser
 window.storage = {
@@ -485,6 +486,8 @@ function WelcomeScreen({ onEnter }) {
   const audioCtxRef = useRef(null);
   const matrixCanvasRef = useRef(null);
   const matrixAnimRef = useRef(null);
+  const introAudioRef = useRef(null);
+  const skippedRef = useRef(false);
 
   // ── Sound helpers (raw Web Audio) ─────────────────────────────────────────
   function getAC() {
@@ -502,26 +505,43 @@ function WelcomeScreen({ onEnter }) {
     osc.start(ac.currentTime + startOffset);
     osc.stop(ac.currentTime + startOffset + duration + 0.05);
   }
-  function tick() { beep(1200, "square", 0.03, 0.04); }
-  function diskSeek() { for (let i = 0; i < 6; i++) beep(800 + i * 40, "square", 0.04, 0.03, i * 0.06); }
-  function postBeep() { beep(880, "square", 0.18, 0.3); }
+  function tick() { if (skippedRef.current) return; beep(1200, "square", 0.03, 0.04); }
+  function diskSeek() { if (skippedRef.current) return; for (let i = 0; i < 6; i++) beep(800 + i * 40, "square", 0.04, 0.03, i * 0.06); }
+  function postBeep() { if (skippedRef.current) return; beep(880, "square", 0.18, 0.3); }
   function loadingChime() {
+    if (skippedRef.current) return;
     [440, 523, 659, 784].forEach((f, i) => beep(f, "triangle", 0.12, 0.15, i * 0.18));
   }
   function startupFanfare() {
+    if (skippedRef.current) return;
     [{ f: 523, t: 0 }, { f: 659, t: 0.15 }, { f: 784, t: 0.30 },
      { f: 1047, t: 0.45 }, { f: 784, t: 0.55 }, { f: 1047, t: 0.65 }]
       .forEach(({ f, t }) => beep(f, "sine", 0.2, 0.18, t));
   }
   function playWin95Sound() {
+    if (skippedRef.current) return;
     const audio = new Audio(process.env.PUBLIC_URL + "/win95.mp3");
     audio.volume = 0.8;
     audio.play().catch(() => {});
+    introAudioRef.current = audio;
   }
   function playRockster() {
+    if (skippedRef.current) return;
     const audio = new Audio(process.env.PUBLIC_URL + "/rockster.mp3");
     audio.volume = 0.8;
     audio.play().catch(() => {});
+    introAudioRef.current = audio;
+  }
+  function stopIntroAudio() {
+    if (introAudioRef.current) {
+      introAudioRef.current.pause();
+      introAudioRef.current.currentTime = 0;
+      introAudioRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -654,7 +674,8 @@ function WelcomeScreen({ onEnter }) {
 
   const handleEnter = () => {
     if (phase === "pre") { startBoot(); return; }
-    if (phase !== "title") return;
+    skippedRef.current = true;
+    stopIntroAudio();
     setFading(true);
     setTimeout(onEnter, 700);
   };
@@ -2163,6 +2184,7 @@ export default function JobLogger() {
               { id: "prep", icon: "◈", label: "PREP" },
               { id: "game", icon: "▶", label: "GAME" },
               { id: "options", icon: "⊙", label: "OPTIONS" },
+              { id: "feedback", icon: "✉", label: "FEEDBACK" },
             ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} className={`sidebar-btn${tab === t.id ? " active" : ""}`}>
                 <span className="sidebar-icon">{t.icon}</span>
@@ -2204,6 +2226,7 @@ export default function JobLogger() {
               { id: "dashboard", label: "STATS" },
               { id: "prep", label: "PREP" },
               { id: "options", label: "OPTIONS" },
+              { id: "feedback", label: "FEEDBACK" },
             ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} className={`mobile-tab-btn${tab === t.id ? " active" : ""}`}>{t.label}</button>
             ))}
@@ -2357,6 +2380,9 @@ export default function JobLogger() {
 
           {/* ── GAME TAB ── */}
           {tab === "game" && <GameSelector />}
+
+          {/* ── FEEDBACK TAB ── */}
+          {tab === "feedback" && <FeedbackTab />}
 
           {/* ── OPTIONS TAB ── */}
           {tab === "options" && (
