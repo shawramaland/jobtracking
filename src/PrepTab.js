@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { QUESTIONS, CHEAT_SHEETS } from "./prepData";
 
-const CATEGORIES = ["All", "Networking", "Windows / AD", "Linux", "Cloud", "VMware", "macOS", "Help Desk", "Behavioral", "Docker", "Kubernetes", "CI/CD", "Bash", "Monitoring", "Incident Response"];
+const CATEGORIES = ["All", "Networking", "Windows / AD", "Linux", "Cloud", "VMware", "macOS", "Help Desk", "Behavioral", "Docker", "Kubernetes", "CI/CD", "Bash", "Monitoring", "Incident Response", "Security"];
 const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
 const DIFF_COLORS = { Easy: "#4ade80", Medium: "#fbbf24", Hard: "#f87171" };
 
@@ -288,42 +288,141 @@ function MockInterview() {
   );
 }
 
-// ── CHEAT SHEETS ──────────────────────────────────────────────────────────────
-function CheatSheets() {
+// ── DOCS ──────────────────────────────────────────────────────────────────────
+function Docs() {
   const [activeSheet, setActiveSheet] = useState(CHEAT_SHEETS[0].id);
-  const [openSections, setOpenSections] = useState({});
+  const [activeSection, setActiveSection] = useState(CHEAT_SHEETS[0].sections[0].title);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const sheet = CHEAT_SHEETS.find(s => s.id === activeSheet);
-  const toggleSection = (title) => setOpenSections(prev => ({ ...prev, [title]: !prev[title] }));
+  const section = sheet.sections.find(s => s.title === activeSection) || sheet.sections[0];
+
+  const selectSheet = (id) => {
+    setActiveSheet(id);
+    setActiveSection(CHEAT_SHEETS.find(s => s.id === id).sections[0].title);
+  };
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
+    <div style={{ display: "flex", gap: "0", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden", minHeight: "500px" }}>
+
+      {/* SIDEBAR */}
+      <div style={{ width: sidebarOpen ? "200px" : "42px", minWidth: sidebarOpen ? "200px" : "42px", background: "var(--surface)", borderRight: "1px solid var(--border)", transition: "all 0.2s", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+
+        {/* Collapse toggle */}
+        <div onClick={() => setSidebarOpen(o => !o)}
+          style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-end" : "center", color: "var(--textMuted)", fontSize: "12px" }}>
+          {sidebarOpen ? "◀" : "▶"}
+        </div>
+
+        {/* Category list */}
         {CHEAT_SHEETS.map(s => (
-          <button key={s.id} onClick={() => setActiveSheet(s.id)}
-            style={{ padding: "8px 14px", borderRadius: "6px", border: `1px solid ${activeSheet === s.id ? "var(--accent)" : "var(--border2)"}`, background: activeSheet === s.id ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent", color: activeSheet === s.id ? "var(--accent)" : "var(--text-muted)", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" }}>
-            {s.emoji} {s.title}
-          </button>
+          <div key={s.id}>
+            {/* Category header */}
+            <div onClick={() => selectSheet(s.id)}
+              style={{
+                padding: sidebarOpen ? "8px 12px" : "8px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: activeSheet === s.id ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
+                borderLeft: activeSheet === s.id ? "2px solid var(--accent)" : "2px solid transparent",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+              }}>
+              <span style={{ fontSize: "14px", flexShrink: 0 }}>{s.emoji}</span>
+              {sidebarOpen && <span style={{ fontSize: "11px", fontWeight: "700", color: activeSheet === s.id ? "var(--accent)" : "var(--text)", letterSpacing: "0.03em" }}>{s.title}</span>}
+            </div>
+
+            {/* Sub-sections (only for active sheet) */}
+            {sidebarOpen && activeSheet === s.id && s.sections.map(sec => (
+              <div key={sec.title} onClick={() => setActiveSection(sec.title)}
+                style={{
+                  padding: "6px 12px 6px 28px",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  color: activeSection === sec.title ? "var(--accent)" : "var(--textMuted)",
+                  background: activeSection === sec.title ? "color-mix(in srgb, var(--accent) 6%, transparent)" : "transparent",
+                  borderLeft: activeSection === sec.title ? "2px solid var(--accent)" : "2px solid transparent",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  transition: "all 0.15s",
+                }}>
+                › {sec.title}
+              </div>
+            ))}
+          </div>
         ))}
       </div>
-      {sheet.sections.map(section => {
-        const isOpen = openSections[section.title] !== false;
-        return (
-          <div key={section.title} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px", marginBottom: "8px", overflow: "hidden" }}>
-            <div onClick={() => toggleSection(section.title)}
-              style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: isOpen ? "var(--surface2)" : "transparent" }}>
-              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>{section.title}</span>
-              <span style={{ color: "var(--text-dim)", fontSize: "12px", transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▼</span>
-            </div>
-            {isOpen && (
-              <div style={{ padding: "0 16px 16px" }}>
-                <pre style={{ margin: 0, fontSize: "11px", color: "var(--text-muted)", lineHeight: "1.8", whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", background: "var(--bg)", padding: "12px", borderRadius: "6px", overflowX: "auto" }}>
-                  {section.content}
-                </pre>
-              </div>
+
+      {/* CONTENT PANE */}
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+        {/* Breadcrumb */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "6px", background: "var(--surface2)", flexShrink: 0 }}>
+          <span style={{ fontSize: "11px", color: "var(--accent)" }}>{sheet.emoji} {sheet.title}</span>
+          <span style={{ fontSize: "11px", color: "var(--textMuted)" }}>›</span>
+          <span style={{ fontSize: "11px", color: "var(--text)", fontWeight: "700" }}>{section.title}</span>
+        </div>
+
+        {/* Section nav pills */}
+        <div style={{ display: "flex", gap: "6px", padding: "10px 16px", flexWrap: "wrap", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0 }}>
+          {sheet.sections.map(sec => (
+            <button key={sec.title} onClick={() => setActiveSection(sec.title)}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "20px",
+                border: `1px solid ${activeSection === sec.title ? "var(--accent)" : "var(--border2)"}`,
+                background: activeSection === sec.title ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "transparent",
+                color: activeSection === sec.title ? "var(--accent)" : "var(--textMuted)",
+                fontSize: "11px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+              }}>
+              {sec.title}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px", flex: 1 }}>
+          <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text)", marginBottom: "12px", letterSpacing: "0.02em" }}>{section.title}</div>
+          <pre style={{
+            margin: 0,
+            fontSize: "12px",
+            color: "var(--text)",
+            lineHeight: "1.9",
+            whiteSpace: "pre-wrap",
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+            background: "var(--bg)",
+            padding: "16px",
+            borderRadius: "8px",
+            border: "1px solid var(--border)",
+            overflowX: "auto",
+          }}>
+            {section.content}
+          </pre>
+
+          {/* Prev / Next navigation */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "16px" }}>
+            {sheet.sections.indexOf(section) > 0 ? (
+              <button onClick={() => setActiveSection(sheet.sections[sheet.sections.indexOf(section) - 1].title)}
+                style={{ background: "transparent", border: "1px solid var(--border2)", color: "var(--textMuted)", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px" }}>
+                ← {sheet.sections[sheet.sections.indexOf(section) - 1].title}
+              </button>
+            ) : <div />}
+            {sheet.sections.indexOf(section) < sheet.sections.length - 1 && (
+              <button onClick={() => setActiveSection(sheet.sections[sheet.sections.indexOf(section) + 1].title)}
+                style={{ background: "transparent", border: "1px solid var(--border2)", color: "var(--textMuted)", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px" }}>
+                {sheet.sections[sheet.sections.indexOf(section) + 1].title} →
+              </button>
             )}
           </div>
-        );
-      })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -337,7 +436,7 @@ export default function PrepTab() {
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--accent)", marginBottom: "16px", textAlign: "center" }}>▶ PREP.exe</div>
 
       <div style={{ display: "flex", gap: "6px", marginBottom: "20px", background: "var(--bg)", borderRadius: "8px", padding: "4px", border: "1px solid var(--border)" }}>
-        {[{ id: "mock", label: "🎤 Mock Interview" }, { id: "sheets", label: "📋 Cheat Sheets" }].map(m => (
+        {[{ id: "mock", label: "🎤 Mock Interview" }, { id: "sheets", label: "📖 Docs" }].map(m => (
           <button key={m.id} onClick={() => setMode(m.id)}
             style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "none", background: mode === m.id ? "var(--surface2)" : "transparent", color: mode === m.id ? "var(--accent)" : "var(--text-muted)", fontSize: "12px", fontWeight: mode === m.id ? "800" : "400", cursor: "pointer", fontFamily: "inherit", borderBottom: mode === m.id ? `2px solid var(--accent)` : "2px solid transparent", transition: "all 0.2s" }}>
             {m.label}
@@ -346,7 +445,7 @@ export default function PrepTab() {
       </div>
 
       {mode === "mock"   && <MockInterview />}
-      {mode === "sheets" && <CheatSheets />}
+      {mode === "sheets" && <Docs />}
     </div>
   );
 }

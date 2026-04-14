@@ -999,6 +999,7 @@ function SnakeGame() {
     let pos;
     do {
       pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+    // eslint-disable-next-line no-loop-func
     } while (snake.some(s => s.x === pos.x && s.y === pos.y));
     return pos;
   };
@@ -1736,6 +1737,7 @@ function TypingGame() {
 function GameSelector() {
   const [activeGame, setActiveGame] = useState(null);
 
+  // eslint-disable-next-line no-unused-vars
   const GAMES = [
     { id: "doom",   emoji: "🔫", name: "DOOM",   sub: "The classic. Rip and tear." },
     { id: "snake",  emoji: "🐍", name: "SNAKE",  sub: "Eat. Grow. Die. Repeat." },
@@ -1866,6 +1868,8 @@ export default function JobLogger() {
   const [editLink, setEditLink] = useState("");
   const [editSalaryMin, setEditSalaryMin] = useState("");
   const [editSalaryMax, setEditSalaryMax] = useState("");
+  const [editFollowUp, setEditFollowUp] = useState("");
+  const [editInterviewNotes, setEditInterviewNotes] = useState("");
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [quip, setQuip] = useState(null);
@@ -1876,7 +1880,8 @@ export default function JobLogger() {
   const [importMsg, setImportMsg] = useState(null);
   const [tab, setTab] = useState("tracker");
   const [welcomed, setWelcomed] = useState(false);
-  const [sortBy, setSortBy] = useState("date-desc");
+  const [sortBy, setSortBy] = useState({ col: "date", dir: "desc" });
+  const cycleSort = (col) => setSortBy(prev => prev.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
   const [customSounds, setCustomSounds] = useState({});
   const fileInputRef = useRef(null);
 
@@ -2039,7 +2044,7 @@ export default function JobLogger() {
   };
 
   const updateJob = (id) => {
-    saveJobs(jobs.map(j => j.id === id ? { ...j, status: editStatus, notes: editNotes, link: editLink, salaryMin: editSalaryMin, salaryMax: editSalaryMax } : j));
+    saveJobs(jobs.map(j => j.id === id ? { ...j, status: editStatus, notes: editNotes, link: editLink, salaryMin: editSalaryMin, salaryMax: editSalaryMax, followUpDate: editFollowUp, interviewNotes: editInterviewNotes } : j));
     setEditingId(null);
     playSound(editStatus); showQuip(editStatus);
   };
@@ -2132,12 +2137,15 @@ export default function JobLogger() {
 
   const filteredJobs = (() => {
     const base = filter === "All" ? searchedJobs : searchedJobs.filter(j => j.status === filter);
+    const { col, dir } = sortBy;
     const sorted = [...base].sort((a, b) => {
-      if (sortBy === "date-desc") return new Date(b.date) - new Date(a.date);
-      if (sortBy === "date-asc") return new Date(a.date) - new Date(b.date);
-      if (sortBy === "company") return a.company.localeCompare(b.company);
-      if (sortBy === "status") return STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status);
-      return 0;
+      let v = 0;
+      if (col === "date")    v = new Date(a.date) - new Date(b.date);
+      else if (col === "company") v = a.company.localeCompare(b.company);
+      else if (col === "role")    v = a.role.localeCompare(b.role);
+      else if (col === "status")  v = STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status);
+      else if (col === "source")  v = a.source.localeCompare(b.source);
+      return dir === "asc" ? v : -v;
     });
     // Pinned always on top
     return [...sorted.filter(j => j.pinned), ...sorted.filter(j => !j.pinned)];
@@ -2267,12 +2275,9 @@ export default function JobLogger() {
                     ))}
                     {filter !== "All" && <div onClick={() => setFilter("All")} style={{ padding: "3px 8px", borderRadius: "3px", fontSize: "10px", color: "#555", border: "1px solid #222", cursor: "pointer" }}>clear ✕</div>}
                   </div>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="field" style={{ fontSize: "11px" }}>
-                    <option value="date-desc">Newest first</option>
-                    <option value="date-asc">Oldest first</option>
-                    <option value="company">Company A–Z</option>
-                    <option value="status">By status</option>
-                  </select>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    Click any column header in the table to sort.
+                  </div>
                 </div>
 
                 <div className="panel" style={{ marginTop: "12px" }}>
@@ -2306,11 +2311,14 @@ export default function JobLogger() {
                       <thead>
                         <tr>
                           <th style={{ width: "28px" }}></th>
-                          <th>COMPANY</th>
-                          <th>ROLE</th>
-                          <th>STATUS</th>
-                          <th>DATE</th>
-                          <th>SOURCE</th>
+                          {[["company","COMPANY"],["role","ROLE"],["status","STATUS"],["date","DATE"],["source","SOURCE"]].map(([col, label]) => (
+                            <th key={col} onClick={() => cycleSort(col)} style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+                              {label}
+                              <span style={{ marginLeft: "4px", opacity: sortBy.col === col ? 1 : 0.2, fontSize: "10px" }}>
+                                {sortBy.col === col ? (sortBy.dir === "asc" ? "▲" : "▼") : "▲"}
+                              </span>
+                            </th>
+                          ))}
                           <th style={{ width: "80px" }}></th>
                         </tr>
                       </thead>
@@ -2331,10 +2339,23 @@ export default function JobLogger() {
                                   {STATUS_EMOJIS[job.status]} {job.status}
                                 </span>
                               </td>
-                              <td style={{ color: "#555", fontSize: "11px", whiteSpace: "nowrap" }}>{formatDate(job.date)}</td>
-                              <td style={{ color: "#444", fontSize: "11px" }}>{job.source}</td>
+                              <td style={{ color: "#555", fontSize: "11px", whiteSpace: "nowrap" }}>
+                                <div>{formatDate(job.date)}</div>
+                                {job.followUpDate && (() => {
+                                  const overdue = new Date(job.followUpDate) <= new Date();
+                                  return (
+                                    <div style={{ fontSize: "10px", marginTop: "2px", color: overdue ? "#f87171" : "#fbbf24", fontWeight: overdue ? "700" : "400" }}>
+                                      {overdue ? "⚠ follow up!" : `📅 ${formatDate(job.followUpDate)}`}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              <td style={{ color: "#444", fontSize: "11px" }}>
+                                <div>{job.source}</div>
+                                {job.interviewNotes && <div style={{ fontSize: "10px", color: "#a78bfa", marginTop: "2px" }}>📝 notes</div>}
+                              </td>
                               <td>
-                                <button onClick={() => { if (editingId === job.id) { setEditingId(null); } else { setEditingId(job.id); setEditStatus(job.status); setEditNotes(job.notes || ""); setEditLink(job.link || ""); setEditSalaryMin(job.salaryMin || ""); setEditSalaryMax(job.salaryMax || ""); } }} className="edit-btn">
+                                <button onClick={() => { if (editingId === job.id) { setEditingId(null); } else { setEditingId(job.id); setEditStatus(job.status); setEditNotes(job.notes || ""); setEditLink(job.link || ""); setEditSalaryMin(job.salaryMin || ""); setEditSalaryMax(job.salaryMax || ""); setEditFollowUp(job.followUpDate || ""); setEditInterviewNotes(job.interviewNotes || ""); } }} className="edit-btn">
                                   {editingId === job.id ? "CLOSE" : "EDIT"}
                                 </button>
                               </td>
@@ -2353,7 +2374,13 @@ export default function JobLogger() {
                                       <input value={editSalaryMin} onChange={(e) => setEditSalaryMin(e.target.value)} placeholder="Salary min (NIS)" type="number" className="field" style={{ flex: 1, color: "#22c55e" }} />
                                       <input value={editSalaryMax} onChange={(e) => setEditSalaryMax(e.target.value)} placeholder="Salary max (NIS)" type="number" className="field" style={{ flex: 1, color: "#22c55e" }} />
                                     </div>
-                                    <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Notes / interview prep..." rows={2} className="field" style={{ resize: "vertical" }} />
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                      <label style={{ fontSize: "10px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>📅 Follow up by</label>
+                                      <input type="date" value={editFollowUp} onChange={(e) => setEditFollowUp(e.target.value)} className="field" style={{ flex: 1 }} />
+                                      {editFollowUp && <button onClick={() => setEditFollowUp("")} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: "12px" }}>✕</button>}
+                                    </div>
+                                    <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Notes..." rows={2} className="field" style={{ resize: "vertical" }} />
+                                    <textarea value={editInterviewNotes} onChange={(e) => setEditInterviewNotes(e.target.value)} placeholder="Interview notes (questions asked, who you spoke to, impressions...)" rows={3} className="field" style={{ resize: "vertical", borderColor: "#4c1d95", color: "#c4b5fd" }} />
                                     <div style={{ display: "flex", gap: "8px" }}>
                                       <button onClick={() => updateJob(job.id)} className="add-btn ready" style={{ flex: 1 }}>SAVE</button>
                                       <button onClick={() => deleteJob(job.id)} className="ghost-btn danger">DELETE</button>
