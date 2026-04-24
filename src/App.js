@@ -5,24 +5,52 @@ import * as XLSX from "xlsx";
 import PrepTab from "./PrepTab";
 import FeedbackTab from "./FeedbackTab";
 
-// Local storage wrapper for browser
+// IndexedDB storage wrapper
+const _dbPromise = new Promise((resolve, reject) => {
+  const req = indexedDB.open("job-tracker-db", 1);
+  req.onupgradeneeded = (e) => e.target.result.createObjectStore("kv");
+  req.onsuccess = (e) => resolve(e.target.result);
+  req.onerror = (e) => reject(e.target.error);
+});
+
 window.storage = {
   get: async (key) => {
-    const val = localStorage.getItem(key);
-    if (val === null) throw new Error("Key not found");
-    return { value: val };
+    const db = await _dbPromise;
+    return new Promise((resolve, reject) => {
+      const req = db.transaction("kv").objectStore("kv").get(key);
+      req.onsuccess = () => {
+        if (req.result === undefined) reject(new Error("Key not found"));
+        else resolve({ value: req.result });
+      };
+      req.onerror = () => reject(req.error);
+    });
   },
   set: async (key, value) => {
-    localStorage.setItem(key, value);
-    return { key, value };
+    const db = await _dbPromise;
+    return new Promise((resolve, reject) => {
+      const req = db.transaction("kv", "readwrite").objectStore("kv").put(value, key);
+      req.onsuccess = () => resolve({ key, value });
+      req.onerror = () => reject(req.error);
+    });
   },
   delete: async (key) => {
-    localStorage.removeItem(key);
-    return { key, deleted: true };
+    const db = await _dbPromise;
+    return new Promise((resolve, reject) => {
+      const req = db.transaction("kv", "readwrite").objectStore("kv").delete(key);
+      req.onsuccess = () => resolve({ key, deleted: true });
+      req.onerror = () => reject(req.error);
+    });
   },
   list: async (prefix) => {
-    const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
-    return { keys };
+    const db = await _dbPromise;
+    return new Promise((resolve, reject) => {
+      const req = db.transaction("kv").objectStore("kv").getAllKeys();
+      req.onsuccess = () => {
+        const keys = prefix ? req.result.filter(k => k.startsWith(prefix)) : req.result;
+        resolve({ keys });
+      };
+      req.onerror = () => reject(req.error);
+    });
   },
 };
 
@@ -1885,52 +1913,7 @@ export default function JobLogger() {
   const [customSounds, setCustomSounds] = useState({});
   const fileInputRef = useRef(null);
 
-  const SEED_DATA = [
-    { company: "COMDA", role: "Customer Technical Support", source: "LinkedIn", status: "Applied", date: "2026-03-10", notes: "" },
-    { company: "NeoTech Israel", role: "System Administrator", source: "LinkedIn", status: "Applied", date: "2026-03-10", notes: "Resume downloaded" },
-    { company: "comblack", role: "NOC Operator", source: "LinkedIn", status: "Applied", date: "2026-03-10", notes: "" },
-    { company: "Tata Consultancy Services", role: "Network Operations Center Operator", source: "LinkedIn", status: "Applied", date: "2026-03-10", notes: "" },
-    { company: "comblack", role: "Desktop Support Technician", source: "LinkedIn", status: "Applied", date: "2026-03-10", notes: "" },
-    { company: "Flashy", role: "Customer Onboarding Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "Application viewed" },
-    { company: "Up-Link Networks", role: "Help Desk Technician", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "Application viewed" },
-    { company: "INGIMA", role: "Cloud Infrastructure Security Expert", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "Cyber 2.0", role: "System Administrator", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "Resume downloaded" },
-    { company: "GNESS", role: "IT Operations Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "NeoTech Israel", role: "Information Technology Help Desk", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "Mercedes-Benz R&D Tel-Aviv", role: "IT Coordinator", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "i24NEWS", role: "Technician", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "Resume downloaded" },
-    { company: "Shekulo Tov Group", role: "IT and Helpdesk Expert", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "Confidential Careers", role: "Junior IT Risk Management Analyst", source: "LinkedIn", status: "Applied", date: "2026-03-08", notes: "" },
-    { company: "RGE Group Ltd.", role: "IT MEDIA", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "comblack", role: "Cloud Infrastructure & Operations Engineer", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "comblack", role: "Monitoring & Control Systems Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "ONE Technologies", role: "Help Desk Technician", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "NeoTech Israel", role: "Information Technology Help Desk", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "Extreme", role: "Infrastructure Operations Engineer", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "YouCC Technologies Ltd.", role: "Help Desk Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "Exsitu Cloud IT Services Ltd.", role: "Information Technology Help Desk Support", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "Datacube", role: "Network Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Yael Group", role: "Junior System Administrator", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Datacube", role: "VDI Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "SQLink Group", role: "GCP Expert", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Vonage", role: "Desktop & Technical Support Specialist", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Resume downloaded" },
-    { company: "Blue Parking (Technoso)", role: "Technical Support Representative", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "One Systems", role: "Computer Technician", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Spines", role: "System Admin", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Global-e", role: "Information Systems Administrator", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Partner", role: "Help Desk Technician", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "Mertens", role: "Information Technology Support Technician", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "" },
-    { company: "eyesAtop", role: "IT & Corporate Infrastructure Engineer", source: "LinkedIn", status: "Applied", date: "2026-02-22", notes: "" },
-    { company: "Phoenix Investment House", role: "Information Technology Support Specialist", source: "LinkedIn", status: "Applied", date: "2026-02-22", notes: "Application viewed" },
-    { company: "Mertens", role: "Technical Support Specialist", source: "LinkedIn", status: "Applied", date: "2026-02-22", notes: "" },
-    { company: "MedOne", role: "IT Cloud and System Virtualization Engineer", source: "LinkedIn", status: "Applied", date: "2026-03-01", notes: "Application viewed" },
-    { company: "Extreme", role: "Help Desk Specialist", source: "LinkedIn", status: "Applied", date: "2026-02-22", notes: "" },
-    { company: "GNESS", role: "Help Desk Specialist", source: "LinkedIn", status: "Applied", date: "2026-02-22", notes: "" },
-    { company: "Ethonia", role: "Help Desk Technician", source: "LinkedIn", status: "HR Call", notes: "Passed HR stage" },
-    { company: "Playtika", role: "Office Administrator", source: "LinkedIn", status: "Applied", notes: "" },
-    { company: "Technologies HQ", role: "Operations Administrator", source: "LinkedIn", status: "Applied", notes: "Cloud ops role, strong fit" },
-    { company: "Buildots", role: "Field Capture Technician", source: "Other", status: "HR Call", notes: "Part-time 2-3 days, 70 NIS/hr" },
-  ];
+  const SEED_DATA = [];
 
   const startTone = async () => { if (!toneStarted) { await Tone.start(); setToneStarted(true); } };
 
@@ -2286,6 +2269,7 @@ export default function JobLogger() {
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} className="ghost-btn">📥 Import</button>
                     {jobs.length > 0 && <button onClick={exportCSV} className="ghost-btn">📤 Export CSV</button>}
+                    {jobs.length > 0 && <button onClick={() => { if (window.confirm("Clear ALL applications? This cannot be undone.")) saveJobs([]); }} className="ghost-btn" style={{ color: "#ef4444" }}>🗑️ Clear All</button>}
                   </div>
                 </div>
               </div>
@@ -2325,7 +2309,7 @@ export default function JobLogger() {
                       <tbody>
                         {filteredJobs.map((job) => (
                           <>
-                            <tr key={job.id} className={`job-row${job.pinned ? " pinned" : ""}${editingId === job.id ? " editing" : ""}`}>
+                            <tr key={job.id} className={`job-row${job.pinned ? " pinned" : ""}${editingId === job.id ? " editing" : ""}`} style={{ background: STATUS_COLORS[job.status]?.bg }}>
                               <td>
                                 <button onClick={() => togglePin(job.id)} className={`pin-btn${job.pinned ? " pinned" : ""}`}>📌</button>
                               </td>
